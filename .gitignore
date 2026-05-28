@@ -1,0 +1,16 @@
+# Node / Vite
+web/node_modules/
+web/dist/
+web/.vite/
+web/.vite-temp/
+web/dev-server*.log
+web/npm-debug.log*
+web/yarn-debug.log*
+web/yarn-error.log*
+
+# Generated content is rebuilt by npm run build.
+web/src/data/generated/*.json
+web/public/data/generated/*.json
+
+# Local verification artifacts
+web/screenshots/

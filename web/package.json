@@ -1,0 +1,30 @@
+{
+  "name": "question-bank-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm run ingest && vite --host 127.0.0.1",
+    "ingest": "node scripts/generate-content.mjs",
+    "test": "vitest run",
+    "build": "npm run ingest && vue-tsc --noEmit && vite build",
+    "smoke:ui": "node scripts/smoke-ui.mjs",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@lucide/vue": "^1.16.0",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^22.10.2",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "fast-glob": "^3.3.2",
+    "gray-matter": "^4.0.3",
+    "markdown-it": "^14.1.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vitest": "^2.1.8",
+    "vue-tsc": "^2.2.0"
+  }
+}
