@@ -8,6 +8,7 @@ const targetUrl = process.argv[2] || "http://127.0.0.1:5173/";
 const screenshotsDir = path.resolve("screenshots");
 const desktopScreenshot = path.join(screenshotsDir, "desktop.png");
 const mobileScreenshot = path.join(screenshotsDir, "mobile.png");
+const mobileDetailScreenshot = path.join(screenshotsDir, "mobile-detail.png");
 const remotePort = 9333;
 const edgeCandidates = [
   process.env.EDGE_PATH,
@@ -156,6 +157,26 @@ async function main() {
     await cdp.evaluate("document.querySelector('.item-row')?.click(); true");
     await cdp.evaluate("document.querySelector('.primary-button')?.click(); true");
     await cdp.waitFor("document.querySelectorAll('.answer-section').length > 0");
+    const desktopScrollCheck = await cdp.evaluate(`(() => {
+      const detail = document.querySelector('.detail-panel');
+      const list = document.querySelector('.list-panel');
+      const filter = document.querySelector('.filter-panel');
+      detail.scrollTop = 360;
+      return {
+        bodyScrollable: document.documentElement.scrollHeight > document.documentElement.clientHeight + 4,
+        detailScrolled: detail.scrollTop > 0,
+        listUnmoved: list.scrollTop === 0,
+        filterUnmoved: filter.scrollTop === 0
+      };
+    })()`);
+    if (
+      desktopScrollCheck.bodyScrollable ||
+      !desktopScrollCheck.detailScrolled ||
+      !desktopScrollCheck.listUnmoved ||
+      !desktopScrollCheck.filterUnmoved
+    ) {
+      throw new Error(`Desktop fixed-column scroll check failed: ${JSON.stringify(desktopScrollCheck)}`);
+    }
 
     await cdp.evaluate(`
       const input = document.querySelector('.search-box input');
@@ -207,6 +228,21 @@ async function main() {
       } : null;
     })()`);
     await cdp.screenshot(mobileScreenshot);
+    await cdp.evaluate("document.querySelector('.filter-panel .mobile-only')?.click(); true");
+    await cdp.waitFor("document.querySelector('.filter-panel.open') === null");
+    await cdp.evaluate("document.querySelector('.item-row')?.click(); true");
+    await cdp.waitFor(
+      "document.querySelector('.workspace.mobile-detail-open .detail-panel') !== null && getComputedStyle(document.querySelector('.detail-panel')).display !== 'none'",
+    );
+    const mobileDetailCheck = await cdp.evaluate(`(() => ({
+      hasBackButton: !!document.querySelector('.mobile-detail-bar button'),
+      listHidden: getComputedStyle(document.querySelector('.list-panel')).display === 'none',
+      detailVisible: getComputedStyle(document.querySelector('.detail-panel')).display !== 'none'
+    }))()`);
+    if (!mobileDetailCheck.hasBackButton || !mobileDetailCheck.listHidden || !mobileDetailCheck.detailVisible) {
+      throw new Error(`Mobile detail check failed: ${JSON.stringify(mobileDetailCheck)}`);
+    }
+    await cdp.screenshot(mobileDetailScreenshot);
 
     if (cdp.browserErrors.length > 0) {
       throw new Error(`Browser console errors: ${cdp.browserErrors.join(" | ")}`);
@@ -220,14 +256,19 @@ async function main() {
           firstTitle,
           desktopScreenshot,
           mobileScreenshot,
+          mobileDetailScreenshot,
+          desktopScrollCheck,
           mobileDrawer,
+          mobileDetailCheck,
           checks: [
             "loaded question rows",
             "captured desktop screenshot",
             "expanded answer",
+            "desktop detail scroll keeps left columns fixed",
             "searched Java",
             "opened knowledge view",
             "opened mobile filter drawer",
+            "opened mobile detail view from list",
             "no console errors",
           ],
         },

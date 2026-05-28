@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import {
+  ArrowLeft,
   BookOpen,
   CheckCircle2,
   ChevronDown,
@@ -54,6 +55,7 @@ const revealedIds = ref(new Set<string>());
 const recentIds = ref(readStringArray(STORAGE_KEYS.recent));
 const selectedQuestionId = ref("");
 const selectedKnowledgeId = ref("");
+const mobileDetailOpen = ref(false);
 
 const isQuestionMode = computed(() => mode.value !== "knowledge");
 const questionPool = computed(() => {
@@ -201,6 +203,7 @@ onMounted(loadGeneratedData);
 watch(mode, () => {
   selectedCategory.value = "全部";
   mobileFiltersOpen.value = false;
+  mobileDetailOpen.value = false;
 });
 
 watch(filteredQuestions, (items) => {
@@ -222,19 +225,38 @@ function selectCategory(category: string) {
   mobileFiltersOpen.value = false;
 }
 
+function isMobileViewport() {
+  return typeof window !== "undefined" && window.matchMedia("(max-width: 940px)").matches;
+}
+
+function openMobileDetailIfNeeded() {
+  if (!isMobileViewport()) return;
+
+  mobileDetailOpen.value = true;
+  mobileFiltersOpen.value = false;
+  window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0 }));
+}
+
+function closeMobileDetail() {
+  mobileDetailOpen.value = false;
+}
+
 function selectQuestion(id: string) {
   selectedQuestionId.value = id;
   addRecentQuestion(id);
+  openMobileDetailIfNeeded();
 }
 
 function selectKnowledge(id: string) {
   selectedKnowledgeId.value = id;
+  openMobileDetailIfNeeded();
 }
 
 function openKnowledge(id: string) {
   mode.value = "knowledge";
   selectedCategory.value = "全部";
   selectedKnowledgeId.value = id;
+  openMobileDetailIfNeeded();
 }
 
 function toggleSet(id: string, collection: typeof favoriteIds, key: string) {
@@ -332,7 +354,7 @@ function isRevealed(id: string) {
       </div>
     </header>
 
-    <main v-if="hasGeneratedData" class="workspace">
+    <main v-if="hasGeneratedData" class="workspace" :class="{ 'mobile-detail-open': mobileDetailOpen }">
       <aside class="filter-panel" :class="{ open: mobileFiltersOpen }" aria-label="筛选分类">
         <div class="panel-heading">
           <span>
@@ -461,6 +483,14 @@ function isRevealed(id: string) {
       </section>
 
       <section class="detail-panel">
+        <div class="mobile-detail-bar mobile-only">
+          <button type="button" class="text-button" @click="closeMobileDetail">
+            <ArrowLeft :size="16" aria-hidden="true" />
+            返回列表
+          </button>
+          <span>{{ activeQuestion ? "题目详情" : "知识详情" }}</span>
+        </div>
+
         <article v-if="activeQuestion" class="detail-content">
           <div class="detail-kicker">
             <span>{{ activeQuestion.category }}</span>
