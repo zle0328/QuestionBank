@@ -877,10 +877,15 @@ mark {
 
   .item-row {
     display: block;
+    min-height: 0;
   }
 
   .row-actions {
+    display: flex;
+    max-width: none;
     margin-top: 12px;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
   }
 
   .detail-content {
