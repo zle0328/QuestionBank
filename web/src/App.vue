@@ -4,7 +4,10 @@ import {
   ArrowLeft,
   BookOpen,
   CheckCircle2,
+  ChevronLeft,
   ChevronDown,
+  ChevronRight,
+  Clock3,
   ExternalLink,
   Filter,
   LibraryBig,
@@ -15,7 +18,7 @@ import {
   X,
 } from "@lucide/vue";
 import type { AppMode, GeneratedMeta, KnowledgeItem, QuestionItem } from "./types";
-import { countBy, matchesText } from "./utils/search";
+import { countBy, highlightMatches, searchScore } from "./utils/search";
 import { readSet, readStringArray, writeSet, writeStringArray } from "./utils/storage";
 
 const emptyMeta: GeneratedMeta = {
@@ -35,6 +38,7 @@ const loadError = ref("");
 const STORAGE_KEYS = {
   favorites: "question-bank:favorites",
   mastered: "question-bank:mastered",
+  review: "question-bank:review",
   recent: "question-bank:recent",
 };
 
@@ -42,6 +46,7 @@ const modeItems = [
   { id: "questions" as const, label: "题库", icon: LibraryBig },
   { id: "knowledge" as const, label: "知识库", icon: BookOpen },
   { id: "favorites" as const, label: "收藏", icon: Star },
+  { id: "review" as const, label: "待复习", icon: Clock3 },
   { id: "mastered" as const, label: "已掌握", icon: CheckCircle2 },
 ];
 
@@ -51,6 +56,7 @@ const selectedCategory = ref("全部");
 const mobileFiltersOpen = ref(false);
 const favoriteIds = ref(readSet(STORAGE_KEYS.favorites));
 const masteredIds = ref(readSet(STORAGE_KEYS.mastered));
+const reviewIds = ref(readSet(STORAGE_KEYS.review));
 const revealedIds = ref(new Set<string>());
 const recentIds = ref(readStringArray(STORAGE_KEYS.recent));
 const selectedQuestionId = ref("");
@@ -65,6 +71,10 @@ const questionPool = computed(() => {
 
   if (mode.value === "mastered") {
     return questions.value.filter((item) => masteredIds.value.has(item.id));
+  }
+
+  if (mode.value === "review") {
+    return questions.value.filter((item) => reviewIds.value.has(item.id));
   }
 
   return questions.value;
@@ -86,25 +96,68 @@ const categoryItems = computed(() => {
   return [{ name: "全部", count: total }, ...entries.map(([name, count]) => ({ name, count }))];
 });
 
-const filteredQuestions = computed(() =>
-  questionPool.value.filter((item) => {
-    const categoryOk = selectedCategory.value === "全部" || item.category === selectedCategory.value;
-    return (
-      categoryOk &&
-      matchesText([item.title, item.category, item.tags, item.excerpt, item.sourcePath], query.value)
-    );
-  }),
-);
+const hasSearchQuery = computed(() => query.value.trim().length > 0);
 
-const filteredKnowledge = computed(() =>
-  knowledge.value.filter((item) => {
-    const categoryOk = selectedCategory.value === "全部" || item.category === selectedCategory.value;
-    return (
-      categoryOk &&
-      matchesText([item.title, item.category, item.tags, item.description, item.excerpt, item.sourcePath], query.value)
-    );
-  }),
-);
+function getQuestionSearchScore(item: QuestionItem) {
+  return searchScore(
+    [
+      { value: item.title, weight: 8 },
+      { value: item.tags, weight: 5 },
+      { value: item.category, weight: 4 },
+      { value: item.excerpt, weight: 2 },
+      { value: item.sourcePath, weight: 1 },
+    ],
+    query.value,
+  );
+}
+
+function getKnowledgeSearchScore(item: KnowledgeItem) {
+  return searchScore(
+    [
+      { value: item.title, weight: 8 },
+      { value: item.tags, weight: 5 },
+      { value: item.category, weight: 4 },
+      { value: item.description, weight: 3 },
+      { value: item.excerpt, weight: 2 },
+      { value: item.sourcePath, weight: 1 },
+    ],
+    query.value,
+  );
+}
+
+const filteredQuestions = computed(() => {
+  const items = questionPool.value
+    .map((item, index) => ({ item, index, score: getQuestionSearchScore(item) }))
+    .filter(({ item, score }) => {
+      const categoryOk = selectedCategory.value === "全部" || item.category === selectedCategory.value;
+      return categoryOk && score > 0;
+    });
+
+  if (hasSearchQuery.value) {
+    items.sort((left, right) => right.score - left.score || left.item.title.localeCompare(right.item.title, "zh-CN"));
+  } else {
+    items.sort((left, right) => left.index - right.index);
+  }
+
+  return items.map(({ item }) => item);
+});
+
+const filteredKnowledge = computed(() => {
+  const items = knowledge.value
+    .map((item, index) => ({ item, index, score: getKnowledgeSearchScore(item) }))
+    .filter(({ item, score }) => {
+      const categoryOk = selectedCategory.value === "全部" || item.category === selectedCategory.value;
+      return categoryOk && score > 0;
+    });
+
+  if (hasSearchQuery.value) {
+    items.sort((left, right) => right.score - left.score || left.item.title.localeCompare(right.item.title, "zh-CN"));
+  } else {
+    items.sort((left, right) => left.index - right.index);
+  }
+
+  return items.map(({ item }) => item);
+});
 
 const activeQuestion = computed(() => {
   if (!isQuestionMode.value) return null;
@@ -151,9 +204,25 @@ const masteredPercent = computed(() =>
   questions.value.length > 0 ? Math.round((masteredIds.value.size / questions.value.length) * 100) : 0,
 );
 
+const activeQuestionIndex = computed(() =>
+  activeQuestion.value ? filteredQuestions.value.findIndex((item) => item.id === activeQuestion.value?.id) : -1,
+);
+
+const questionProgressLabel = computed(() => {
+  if (!activeQuestion.value || activeQuestionIndex.value < 0) return "未选择题目";
+
+  return `第 ${activeQuestionIndex.value + 1} / ${filteredQuestions.value.length} 题`;
+});
+
+const canGoPreviousQuestion = computed(() => activeQuestionIndex.value > 0);
+const canGoNextQuestion = computed(
+  () => activeQuestionIndex.value >= 0 && activeQuestionIndex.value < filteredQuestions.value.length - 1,
+);
+
 const activeListTitle = computed(() => {
   if (mode.value === "knowledge") return "知识文章";
   if (mode.value === "favorites") return "收藏题目";
+  if (mode.value === "review") return "待复习题目";
   if (mode.value === "mastered") return "已掌握题目";
   return "面试题目";
 });
@@ -165,6 +234,43 @@ const visibleCount = computed(() =>
 const hasGeneratedData = computed(
   () => !isLoading.value && !loadError.value && questions.value.length > 0 && knowledge.value.length > 0,
 );
+
+const hasActiveFilter = computed(() => hasSearchQuery.value || selectedCategory.value !== "全部");
+
+const emptyState = computed(() => {
+  if (hasActiveFilter.value) {
+    return {
+      title: "没有匹配内容",
+      description: "换个关键词或清空分类筛选再试。",
+    };
+  }
+
+  if (mode.value === "favorites") {
+    return {
+      title: "还没有收藏题目",
+      description: "在题目行或详情页点击星标，就能把重点题目收进这里。",
+    };
+  }
+
+  if (mode.value === "review") {
+    return {
+      title: "还没有待复习题目",
+      description: "遇到不稳的题目点一下时钟，之后可以集中回看。",
+    };
+  }
+
+  if (mode.value === "mastered") {
+    return {
+      title: "还没有已掌握题目",
+      description: "确认答得顺以后标记已掌握，顶部进度会同步更新。",
+    };
+  }
+
+  return {
+    title: "没有可展示内容",
+    description: "请先生成题库数据，或切换到其他视图查看。",
+  };
+});
 
 async function loadJson<T>(fileName: string): Promise<T> {
   const response = await fetch(`${import.meta.env.BASE_URL}data/generated/${fileName}`);
@@ -275,7 +381,37 @@ function toggleFavorite(id: string) {
 }
 
 function toggleMastered(id: string) {
-  toggleSet(id, masteredIds, STORAGE_KEYS.mastered);
+  const next = new Set(masteredIds.value);
+  if (next.has(id)) {
+    next.delete(id);
+  } else {
+    next.add(id);
+    if (reviewIds.value.has(id)) {
+      const nextReview = new Set(reviewIds.value);
+      nextReview.delete(id);
+      reviewIds.value = nextReview;
+      writeSet(STORAGE_KEYS.review, nextReview);
+    }
+  }
+  masteredIds.value = next;
+  writeSet(STORAGE_KEYS.mastered, next);
+}
+
+function toggleReview(id: string) {
+  const next = new Set(reviewIds.value);
+  if (next.has(id)) {
+    next.delete(id);
+  } else {
+    next.add(id);
+    if (masteredIds.value.has(id)) {
+      const nextMastered = new Set(masteredIds.value);
+      nextMastered.delete(id);
+      masteredIds.value = nextMastered;
+      writeSet(STORAGE_KEYS.mastered, nextMastered);
+    }
+  }
+  reviewIds.value = next;
+  writeSet(STORAGE_KEYS.review, next);
 }
 
 function toggleReveal(id: string) {
@@ -303,12 +439,27 @@ function isFavorite(id: string) {
   return favoriteIds.value.has(id);
 }
 
+function isReview(id: string) {
+  return reviewIds.value.has(id);
+}
+
 function isMastered(id: string) {
   return masteredIds.value.has(id);
 }
 
 function isRevealed(id: string) {
   return revealedIds.value.has(id);
+}
+
+function highlighted(value: string | undefined) {
+  return highlightMatches(value, query.value);
+}
+
+function goToQuestion(offset: -1 | 1) {
+  const next = filteredQuestions.value[activeQuestionIndex.value + offset];
+  if (!next) return;
+
+  selectQuestion(next.id);
 }
 </script>
 
@@ -350,6 +501,7 @@ function isRevealed(id: string) {
       <div class="stats-strip" aria-label="数据统计">
         <span>{{ meta.questionCount || questions.length }} 题</span>
         <span>{{ meta.knowledgeCount || knowledge.length }} 篇知识</span>
+        <span>待复习 {{ reviewIds.size }}</span>
         <span>掌握 {{ masteredPercent }}%</span>
       </div>
     </header>
@@ -407,9 +559,9 @@ function isRevealed(id: string) {
 
         <div v-if="visibleCount === 0" class="empty-state">
           <Search :size="28" aria-hidden="true" />
-          <h2>没有匹配内容</h2>
-          <p>换个关键词或清空分类筛选再试。</p>
-          <button type="button" class="text-button" @click="resetFilters">
+          <h2>{{ emptyState.title }}</h2>
+          <p>{{ emptyState.description }}</p>
+          <button v-if="hasActiveFilter" type="button" class="text-button" @click="resetFilters">
             <RotateCcw :size="16" aria-hidden="true" />
             重置筛选
           </button>
@@ -428,11 +580,11 @@ function isRevealed(id: string) {
             @keydown.space.prevent="selectQuestion(item.id)"
           >
             <div class="item-main">
-              <h2>{{ item.title }}</h2>
-              <p>{{ item.excerpt || "暂无摘要，打开后查看完整题解。" }}</p>
+              <h2 v-html="highlighted(item.title)"></h2>
+              <p v-html="highlighted(item.excerpt || '暂无摘要，打开后查看完整题解。')"></p>
               <div class="meta-line">
-                <span>{{ item.category }}</span>
-                <span v-if="item.tags.length">{{ item.tags.slice(0, 3).join(" / ") }}</span>
+                <span v-html="highlighted(item.category)"></span>
+                <span v-if="item.tags.length" v-html="highlighted(item.tags.slice(0, 3).join(' / '))"></span>
               </div>
             </div>
             <div class="row-actions">
@@ -444,6 +596,15 @@ function isRevealed(id: string) {
                 @click.stop="toggleFavorite(item.id)"
               >
                 <Star :size="17" />
+              </button>
+              <button
+                type="button"
+                class="icon-button"
+                :class="{ selected: isReview(item.id) }"
+                :aria-label="isReview(item.id) ? '移出待复习' : '加入待复习'"
+                @click.stop="toggleReview(item.id)"
+              >
+                <Clock3 :size="17" />
               </button>
               <button
                 type="button"
@@ -471,11 +632,11 @@ function isRevealed(id: string) {
             @keydown.space.prevent="selectKnowledge(item.id)"
           >
             <div class="item-main">
-              <h2>{{ item.title }}</h2>
-              <p>{{ item.description || item.excerpt || "暂无摘要，打开后查看完整知识内容。" }}</p>
+              <h2 v-html="highlighted(item.title)"></h2>
+              <p v-html="highlighted(item.description || item.excerpt || '暂无摘要，打开后查看完整知识内容。')"></p>
               <div class="meta-line">
-                <span>{{ item.category }}</span>
-                <span v-if="item.tags.length">{{ item.tags.slice(0, 4).join(" / ") }}</span>
+                <span v-html="highlighted(item.category)"></span>
+                <span v-if="item.tags.length" v-html="highlighted(item.tags.slice(0, 4).join(' / '))"></span>
               </div>
             </div>
           </article>
@@ -511,6 +672,15 @@ function isRevealed(id: string) {
               <button
                 type="button"
                 class="icon-button"
+                :class="{ selected: isReview(activeQuestion.id) }"
+                :aria-label="isReview(activeQuestion.id) ? '移出待复习' : '加入待复习'"
+                @click="toggleReview(activeQuestion.id)"
+              >
+                <Clock3 :size="18" />
+              </button>
+              <button
+                type="button"
+                class="icon-button"
                 :class="{ selected: isMastered(activeQuestion.id) }"
                 :aria-label="isMastered(activeQuestion.id) ? '取消已掌握' : '标记已掌握'"
                 @click="toggleMastered(activeQuestion.id)"
@@ -525,6 +695,34 @@ function isRevealed(id: string) {
           </div>
 
           <p class="lead-text">{{ activeQuestion.excerpt || "这道题暂无摘要，展开答案查看完整内容。" }}</p>
+
+          <div class="study-toolbar" aria-label="刷题操作">
+            <div class="study-progress">
+              <span>{{ questionProgressLabel }}</span>
+              <strong v-if="isMastered(activeQuestion.id)">已掌握</strong>
+              <strong v-else-if="isReview(activeQuestion.id)">待复习</strong>
+              <strong v-else>练习中</strong>
+            </div>
+            <div class="study-controls">
+              <button
+                type="button"
+                class="text-button"
+                :disabled="!canGoPreviousQuestion"
+                @click="goToQuestion(-1)"
+              >
+                <ChevronLeft :size="16" aria-hidden="true" />
+                上一题
+              </button>
+              <button type="button" class="text-button" :disabled="!canGoNextQuestion" @click="goToQuestion(1)">
+                下一题
+                <ChevronRight :size="16" aria-hidden="true" />
+              </button>
+              <button type="button" class="text-button" :class="{ selected: isReview(activeQuestion.id) }" @click="toggleReview(activeQuestion.id)">
+                <Clock3 :size="16" aria-hidden="true" />
+                {{ isReview(activeQuestion.id) ? "移出复习" : "加入复习" }}
+              </button>
+            </div>
+          </div>
 
           <div v-if="!isRevealed(activeQuestion.id)" class="answer-gate">
             <h2>先想一想，再看答案</h2>

@@ -40,4 +40,4 @@ export interface GeneratedMeta {
   knowledgeCategories: Record<string, number>;
 }
 
-export type AppMode = "questions" | "knowledge" | "favorites" | "mastered";
+export type AppMode = "questions" | "knowledge" | "favorites" | "review" | "mastered";

@@ -90,7 +90,17 @@ async function connectToPage(wsUrl) {
     });
 
     if (result.exceptionDetails) {
-      throw new Error(result.exceptionDetails.text || "Runtime evaluation failed");
+      const details = result.exceptionDetails;
+      const stack = details.stackTrace?.callFrames
+        ?.map((frame) => `${frame.functionName || "<anonymous>"} (${frame.url}:${frame.lineNumber + 1}:${frame.columnNumber + 1})`)
+        .join("\n");
+      throw new Error(
+        [
+          details.text || "Runtime evaluation failed",
+          details.exception?.description,
+          stack,
+        ].filter(Boolean).join("\n"),
+      );
     }
 
     return result.result?.value;
@@ -178,13 +188,72 @@ async function main() {
       throw new Error(`Desktop fixed-column scroll check failed: ${JSON.stringify(desktopScrollCheck)}`);
     }
 
-    await cdp.evaluate(`
+    await cdp.evaluate(`(() => {
       const input = document.querySelector('.search-box input');
       input.value = 'Java';
       input.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    })()`);
+    await cdp.waitFor("document.querySelector('.list-panel')?.innerText.includes('Java')");
+    await cdp.waitFor("document.querySelector('.item-row mark') !== null");
+    const searchHighlightCheck = await cdp.evaluate(`(() => ({
+      hasMark: !!document.querySelector('.item-row mark'),
+      firstRowText: document.querySelector('.item-row')?.innerText ?? ''
+    }))()`);
+    if (!searchHighlightCheck.hasMark || !searchHighlightCheck.firstRowText.includes("Java")) {
+      throw new Error(`Search highlight check failed: ${JSON.stringify(searchHighlightCheck)}`);
+    }
+
+    await cdp.evaluate(`(() => {
+      const input = document.querySelector('.search-box input');
+      input.value = '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    })()`);
+    await cdp.waitFor("document.querySelectorAll('.item-row').length > 1");
+    await cdp.evaluate("document.querySelector('.item-row')?.click(); true");
+    await cdp.waitFor("document.querySelector('.study-progress')?.innerText.includes('第 1')");
+    await cdp.evaluate(`
+      [...document.querySelectorAll('.study-controls button')]
+        .find((button) => button.textContent.includes('下一题'))
+        ?.click();
       true;
     `);
-    await cdp.waitFor("document.querySelector('.list-panel')?.innerText.includes('Java')");
+    await cdp.waitFor("document.querySelector('.study-progress')?.innerText.includes('第 2')");
+    const studyNavigationCheck = await cdp.evaluate(`(() => ({
+      progress: document.querySelector('.study-progress')?.innerText ?? '',
+      activeTitle: document.querySelector('.detail-content h1')?.innerText ?? ''
+    }))()`);
+    if (!studyNavigationCheck.progress.includes("第 2")) {
+      throw new Error(`Study navigation check failed: ${JSON.stringify(studyNavigationCheck)}`);
+    }
+
+    await cdp.evaluate(`
+      [...document.querySelectorAll('.study-controls .text-button')]
+        .find((button) => button.textContent.includes('加入复习'))
+        ?.click();
+      true;
+    `);
+    await cdp.waitFor(
+      "[...document.querySelectorAll('.mode-tabs button')].some((button) => button.textContent.includes('待复习')) && document.querySelector('.stats-strip')?.innerText.includes('待复习 1')",
+    );
+    await cdp.evaluate(`
+      [...document.querySelectorAll('.mode-tabs button')]
+        .find((button) => button.textContent.includes('待复习'))
+        ?.click();
+      true;
+    `);
+    await cdp.waitFor(
+      "document.querySelector('.list-panel .panel-heading')?.innerText.includes('待复习题目') && document.querySelectorAll('.item-row').length === 1",
+    );
+    const reviewModeCheck = await cdp.evaluate(`(() => ({
+      title: document.querySelector('.list-panel .panel-heading')?.innerText ?? '',
+      rowCount: document.querySelectorAll('.item-row').length,
+      stats: document.querySelector('.stats-strip')?.innerText ?? ''
+    }))()`);
+    if (!reviewModeCheck.title.includes("待复习题目") || reviewModeCheck.rowCount !== 1) {
+      throw new Error(`Review mode check failed: ${JSON.stringify(reviewModeCheck)}`);
+    }
 
     await cdp.evaluate(`
       [...document.querySelectorAll('.mode-tabs button')]
@@ -258,6 +327,9 @@ async function main() {
           mobileScreenshot,
           mobileDetailScreenshot,
           desktopScrollCheck,
+          searchHighlightCheck,
+          studyNavigationCheck,
+          reviewModeCheck,
           mobileDrawer,
           mobileDetailCheck,
           checks: [
@@ -265,7 +337,9 @@ async function main() {
             "captured desktop screenshot",
             "expanded answer",
             "desktop detail scroll keeps left columns fixed",
-            "searched Java",
+            "searched Java with highlight",
+            "navigated to the next question",
+            "added question to review mode",
             "opened knowledge view",
             "opened mobile filter drawer",
             "opened mobile detail view from list",

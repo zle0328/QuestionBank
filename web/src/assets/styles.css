@@ -168,6 +168,8 @@ input:focus-visible,
 }
 
 .stats-strip {
+  grid-column: 3;
+  grid-row: 1;
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
@@ -395,6 +397,12 @@ input:focus-visible,
   gap: 6px;
 }
 
+.row-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 78px;
+}
+
 .icon-button {
   display: inline-grid;
   width: 36px;
@@ -411,6 +419,13 @@ input:focus-visible,
   border-color: rgba(15, 118, 110, 0.28);
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+mark {
+  border-radius: 4px;
+  background: #fde68a;
+  color: #78350f;
+  padding: 0 2px;
 }
 
 .mobile-only {
@@ -434,6 +449,8 @@ input:focus-visible,
 }
 
 .detail-content {
+  max-width: 880px;
+  margin: 0 auto;
   padding: 22px;
 }
 
@@ -490,6 +507,44 @@ input:focus-visible,
   line-height: 1.75;
 }
 
+.study-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 10px;
+  backdrop-filter: blur(12px);
+}
+
+.study-progress {
+  display: flex;
+  min-width: 132px;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.study-progress strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.study-controls {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .answer-gate,
 .empty-state,
 .bootstrap-error {
@@ -539,8 +594,15 @@ input:focus-visible,
   padding: 0 12px;
 }
 
-.text-button:hover {
+.text-button:hover,
+.text-button.selected {
+  border-color: rgba(15, 118, 110, 0.26);
   background: var(--accent-soft);
+}
+
+.text-button:disabled:hover {
+  border-color: var(--line);
+  background: var(--surface);
 }
 
 .answer-content {
@@ -553,8 +615,8 @@ input:focus-visible,
 
 .answer-section {
   margin-top: 18px;
-  border-top: 1px solid var(--line);
-  padding-top: 16px;
+  border-left: 3px solid rgba(15, 118, 110, 0.32);
+  padding: 2px 0 2px 16px;
 }
 
 .answer-section h2,
@@ -568,6 +630,11 @@ input:focus-visible,
   font-size: 15px;
   line-height: 1.8;
   overflow-wrap: anywhere;
+}
+
+.answer-section .markdown-body,
+.article-body {
+  max-width: 78ch;
 }
 
 .markdown-body h1,
@@ -725,6 +792,7 @@ input:focus-visible,
 
   .stats-strip {
     justify-content: flex-start;
+    grid-row: auto;
     overflow-x: auto;
   }
 
