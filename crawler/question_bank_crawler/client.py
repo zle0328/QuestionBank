@@ -7,8 +7,16 @@ from urllib.request import Request, urlopen
 
 from .models import CandidateItem
 
+DEFAULT_API_USER_AGENT = "QuestionBankCrawler/0.1 (+https://github.com/zle0328/QuestionBank)"
 
-def submit_candidates(api_base_url: str, admin_token: str, items: list[CandidateItem], job_id: str | None = None) -> dict:
+
+def submit_candidates(
+    api_base_url: str,
+    admin_token: str,
+    items: list[CandidateItem],
+    job_id: str | None = None,
+    user_agent: str | None = None,
+) -> dict:
     endpoint = api_base_url.rstrip("/") + "/api/admin/candidates/batch"
     payload = {
         "jobId": job_id,
@@ -38,8 +46,10 @@ def submit_candidates(api_base_url: str, admin_token: str, items: list[Candidate
         method="POST",
         headers={
             "Authorization": f"Bearer {admin_token}",
-            "Content-Type": "application/json",
+            "Content-Type": "application/json; charset=utf-8",
             "Accept": "application/json",
+            "User-Agent": (user_agent or DEFAULT_API_USER_AGENT).strip() or DEFAULT_API_USER_AGENT,
+            "X-QuestionBank-Crawler": "1",
         },
     )
 

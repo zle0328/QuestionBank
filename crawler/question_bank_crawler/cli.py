@@ -17,6 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--submit", action="store_true", help="Submit candidates to Worker API.")
     parser.add_argument("--api-base-url", default=os.getenv("ADMIN_API_BASE_URL"), help="Worker API base URL.")
     parser.add_argument("--admin-token", default=os.getenv("ADMIN_TOKEN"), help="Admin bearer token.")
+    parser.add_argument("--user-agent", default=os.getenv("CRAWLER_USER_AGENT"), help="User-Agent for crawler API submits.")
     return parser
 
 
@@ -43,7 +44,7 @@ def main(argv: list[str] | None = None) -> int:
         print("--api-base-url/ADMIN_API_BASE_URL and --admin-token/ADMIN_TOKEN are required when --submit is used.", file=sys.stderr)
         return 2
 
-    response = submit_candidates(args.api_base_url, args.admin_token, candidates)
+    response = submit_candidates(args.api_base_url, args.admin_token, candidates, user_agent=args.user_agent or config.user_agent)
     print(response)
     return 0
 

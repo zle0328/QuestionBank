@@ -10,10 +10,11 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from question_bank_crawler.cli import main
+from question_bank_crawler.client import submit_candidates
 from question_bank_crawler.config import load_config
 from question_bank_crawler.crawler import crawl_source
 from question_bank_crawler.extract import content_hash, parse_html
-from question_bank_crawler.models import CrawlerConfig, SourceConfig
+from question_bank_crawler.models import CandidateItem, CrawlResult, CrawlerConfig, SourceConfig
 
 
 class CrawlerTests(unittest.TestCase):
@@ -152,6 +153,89 @@ class CrawlerTests(unittest.TestCase):
 
         submit_candidates.assert_not_called()
         self.assertEqual(exit_code, 0)
+
+    def test_submit_candidates_sends_project_user_agent(self) -> None:
+        item = CandidateItem(
+            type="question",
+            title="Java 线程池怎么配置？",
+            category="Java",
+            tags=["线程池"],
+            excerpt="线程池参数配置。",
+            content_md="Java 线程池面试会考核心线程数、最大线程数、队列、拒绝策略和监控。",
+            source_url="https://docs.example/thread-pool",
+            source_name="Docs",
+            hash="hash-1",
+        )
+
+        class Response:
+            headers = {}
+
+            def __enter__(self) -> "Response":
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return b'{"accepted":1}'
+
+        with patch("question_bank_crawler.client.urlopen", return_value=Response()) as urlopen:
+            response = submit_candidates("https://worker.example", "secret", [item], user_agent="QuestionBankCrawler/Test")
+
+        request = urlopen.call_args.args[0]
+        self.assertEqual(response, {"accepted": 1})
+        self.assertEqual(request.get_header("User-agent"), "QuestionBankCrawler/Test")
+        self.assertEqual(request.get_header("X-questionbank-crawler"), "1")
+        self.assertEqual(request.get_header("Accept"), "application/json")
+
+    def test_cli_passes_config_user_agent_to_submit(self) -> None:
+        candidate = CandidateItem(
+            type="knowledge",
+            title="Redis 基础",
+            category="数据库",
+            tags=["Redis"],
+            excerpt="Redis 面试基础。",
+            content_md="Redis 面试会考缓存、持久化、过期策略、淘汰策略和分布式锁。",
+            source_url="https://docs.example/redis",
+            source_name="Docs",
+            hash="hash-redis",
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "sources.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "userAgent": "QuestionBankCrawler/CI",
+                        "sources": [
+                            {
+                                "name": "Docs",
+                                "baseUrl": "https://docs.example/",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with (
+                patch("question_bank_crawler.cli.crawl_all", return_value=[CrawlResult("Docs", [candidate], [])]),
+                patch("question_bank_crawler.cli.submit_candidates", return_value={"accepted": 1}) as submit,
+            ):
+                exit_code = main(
+                    [
+                        "--config",
+                        str(path),
+                        "--submit",
+                        "--api-base-url",
+                        "https://worker.example",
+                        "--admin-token",
+                        "secret",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(submit.call_args.kwargs["user_agent"], "QuestionBankCrawler/CI")
 
 
 if __name__ == "__main__":
