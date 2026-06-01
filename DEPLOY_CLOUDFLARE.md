@@ -133,7 +133,9 @@ python -m question_bank_crawler.cli --config crawler\sources.json --submit
 
 - 每周一 UTC 02:17 运行一次。
 - 支持 `workflow_dispatch` 手动触发。
-- 如果仓库里没有 `crawler/sources.json`，会安全跳过。
+- 优先使用仓库里的 `crawler/sources.json`。
+- 如果没有 `crawler/sources.json`，会尝试读取 GitHub secret `CRAWLER_SOURCES_JSON` 并写成临时配置文件。
+- 如果两者都没有，会安全跳过。
 
 需要在 GitHub 仓库 Settings -> Secrets and variables -> Actions 添加：
 
@@ -141,6 +143,20 @@ python -m question_bank_crawler.cli --config crawler\sources.json --submit
 | --- | --- |
 | `ADMIN_API_BASE_URL` | Worker API 根地址 |
 | `ADMIN_TOKEN` | Worker admin bearer token |
+| `CRAWLER_SOURCES_JSON` | 可选，采集来源 JSON；不想把来源配置提交到仓库时使用 |
+
+`CRAWLER_SOURCES_JSON` 示例：
+
+```json
+{
+  "userAgent": "QuestionBankCrawler/0.1 (+https://github.com/zle0328/QuestionBank)",
+  "defaultDelaySeconds": 2,
+  "defaultMaxPages": 20,
+  "sources": []
+}
+```
+
+先用空 `sources` 跑通 workflow，再逐个加入确认允许采集的公开站点。
 
 如果以后要把 Worker 部署也放进 GitHub Actions，再单独加 `CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID`，并使用 Wrangler action。第一版先保持手动部署 Worker，降低误发风险。
 
