@@ -18,6 +18,7 @@ class SourceConfig:
     start_urls: list[str] = field(default_factory=list)
     max_pages: int | None = None
     delay_seconds: float | None = None
+    trusted: bool = False
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,10 @@ class CandidateItem:
     source_url: str
     source_name: str
     hash: str
+    trusted_source: bool = False
+    review_score: int = 0
+    review_flags: list[str] = field(default_factory=list)
+    review_reason: str = ""
 
 
 @dataclass(frozen=True)

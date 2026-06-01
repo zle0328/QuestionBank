@@ -34,6 +34,7 @@ def load_config(path: str | Path) -> CrawlerConfig:
                 start_urls=_string_list(raw_source.get("startUrls")),
                 max_pages=int(raw_source["maxPages"]) if raw_source.get("maxPages") else None,
                 delay_seconds=float(raw_source["delaySeconds"]) if raw_source.get("delaySeconds") else None,
+                trusted=bool(raw_source.get("trusted", False)),
             )
         )
 

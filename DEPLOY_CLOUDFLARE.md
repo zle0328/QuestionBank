@@ -99,7 +99,16 @@ $env:ADMIN_TOKEN="你的管理员 token"
 npm run import:local
 ```
 
-`POST /api/admin/import-local` 会把当前本地题库作为 `published` 写入 D1；重复 hash 或 canonical URL 会标记为 `duplicate`。
+`POST /api/admin/import-local` 会把当前本地题库作为 `published` 写入 D1；重复 hash、canonical URL 或标题指纹会标记为 `duplicate`。
+
+采集内容会自动审核：
+
+- hash、URL 或标题指纹重复：`duplicate`。
+- 规则分低于 60：`rejected`。
+- 可信来源且规则分不低于 85：`published`。
+- 其他合格内容：`candidate`。
+
+可信来源需要在来源配置中显式设置 `trusted: true`，只建议用于许可清晰、你确认可以采集和展示的站点。
 
 ## Python 采集器
 
@@ -156,7 +165,7 @@ python -m question_bank_crawler.cli --config crawler\sources.json --submit
 }
 ```
 
-先用空 `sources` 跑通 workflow，再逐个加入确认允许采集的公开站点。
+先用空 `sources` 跑通 workflow，再逐个加入确认允许采集的公开站点。不要把普通博客或聚合站直接设置为 `trusted: true`；它们应该先进入候选池。
 
 如果以后要把 Worker 部署也放进 GitHub Actions，再单独加 `CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID`，并使用 Wrangler action。第一版先保持手动部署 Worker，降低误发风险。
 

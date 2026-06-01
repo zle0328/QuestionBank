@@ -43,13 +43,18 @@ class FakeStatement {
     }
 
     if (this.sql.includes("WHERE hash = ?")) {
-      const [hash] = this.params;
-      return (this.db.contentItems.find((item) => item.hash === hash) ?? null) as T | null;
+      const [hash, excludedId] = this.params;
+      return (this.db.contentItems.find((item) => item.hash === hash && item.id !== excludedId) ?? null) as T | null;
     }
 
     if (this.sql.includes("WHERE source_url = ?")) {
-      const [sourceUrl] = this.params;
-      return (this.db.contentItems.find((item) => item.source_url === sourceUrl) ?? null) as T | null;
+      const [sourceUrl, excludedId] = this.params;
+      return (this.db.contentItems.find((item) => item.source_url === sourceUrl && item.id !== excludedId) ?? null) as T | null;
+    }
+
+    if (this.sql.includes("WHERE type = ? AND title_key = ?")) {
+      const [type, titleKey, excludedId] = this.params;
+      return (this.db.contentItems.find((item) => item.type === type && item.title_key === titleKey && item.id !== excludedId) ?? null) as T | null;
     }
 
     return null;
@@ -162,6 +167,12 @@ export class FakeD1Database {
       sourcePath,
       status,
       hash,
+      titleKey,
+      duplicateOf,
+      reviewScore,
+      reviewFlagsJson,
+      reviewReason,
+      reviewedAt,
       createdAt,
       updatedAt,
       publishedAt,
@@ -182,6 +193,12 @@ export class FakeD1Database {
       source_path: sourcePath ? String(sourcePath) : null,
       status: status as ContentItemRow["status"],
       hash: String(hash),
+      title_key: String(titleKey ?? ""),
+      duplicate_of: duplicateOf ? String(duplicateOf) : null,
+      review_score: Number(reviewScore ?? 0),
+      review_flags_json: String(reviewFlagsJson ?? "[]"),
+      review_reason: String(reviewReason ?? ""),
+      reviewed_at: reviewedAt ? String(reviewedAt) : null,
       created_at: String(createdAt),
       updated_at: String(updatedAt),
       published_at: publishedAt ? String(publishedAt) : null,

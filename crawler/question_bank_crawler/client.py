@@ -23,6 +23,10 @@ def submit_candidates(api_base_url: str, admin_token: str, items: list[Candidate
                 "sourceUrl": item.source_url,
                 "sourceName": item.source_name,
                 "hash": item.hash,
+                "trustedSource": item.trusted_source,
+                "reviewScore": item.review_score,
+                "reviewFlags": item.review_flags,
+                "reviewReason": item.review_reason,
             }
             for item in items
         ],

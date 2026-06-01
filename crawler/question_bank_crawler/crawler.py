@@ -11,6 +11,28 @@ from .extract import canonicalize_url, content_hash, excerpt, looks_like_content
 from .models import CandidateItem, CrawlFailure, CrawlResult, CrawlerConfig, SourceConfig
 
 MIN_TEXT_LENGTH = 120
+PROMOTION_PATTERNS = ["关注公众号", "扫码", "加群", "知识星球", "付费", "优惠券", "领取资料", "添加微信"]
+TECH_KEYWORDS = [
+    "java",
+    "spring",
+    "mysql",
+    "redis",
+    "jvm",
+    "线程",
+    "并发",
+    "分布式",
+    "数据库",
+    "缓存",
+    "消息队列",
+    "前端",
+    "vue",
+    "react",
+    "算法",
+    "网络",
+    "操作系统",
+    "面试",
+    "题",
+]
 
 
 def _robots_url(base_url: str) -> str:
@@ -38,6 +60,40 @@ def seed_urls(source: SourceConfig, config: CrawlerConfig) -> tuple[list[str], l
     ]
     failures = [CrawlFailure(url=url, reason=reason) for url, reason in feed_failures]
     return list(dict.fromkeys(canonical_seeds)), failures
+
+
+def review_content(source: SourceConfig, title: str, body: str) -> tuple[int, list[str], str]:
+    flags: list[str] = []
+    score = 50 + (10 if source.trusted else 0)
+    normalized = f"{title}\n{body}".lower()
+    text_length = len(body.strip())
+
+    if len(title.strip()) < 4 or title.startswith("http"):
+        score -= 25
+        flags.append("weak_title")
+    elif len(title) <= 90:
+        score += 10
+
+    if text_length >= 800:
+        score += 25
+    elif text_length >= 300:
+        score += 15
+    elif text_length < 160:
+        score -= 35
+        flags.append("short_content")
+
+    if any(keyword in normalized for keyword in TECH_KEYWORDS):
+        score += 15
+    else:
+        score -= 15
+        flags.append("low_technical_signal")
+
+    if any(pattern in normalized for pattern in PROMOTION_PATTERNS):
+        score -= 30
+        flags.append("promotion_risk")
+
+    final_score = max(0, min(100, round(score)))
+    return final_score, flags, f"crawler_rule_score={final_score}; trusted={source.trusted}; length={text_length}; flags={','.join(flags) or 'none'}"
 
 
 def crawl_source(source: SourceConfig, config: CrawlerConfig, limit: int | None = None) -> CrawlResult:
@@ -78,6 +134,7 @@ def crawl_source(source: SourceConfig, config: CrawlerConfig, limit: int | None 
         if len(body) < MIN_TEXT_LENGTH:
             failures.append(CrawlFailure(url=url, reason="empty_or_short_content"))
         else:
+            review_score, review_flags, review_reason = review_content(source, title or url, body)
             candidates.append(
                 CandidateItem(
                     type=source.type,
@@ -89,6 +146,10 @@ def crawl_source(source: SourceConfig, config: CrawlerConfig, limit: int | None 
                     source_url=url,
                     source_name=source.name,
                     hash=content_hash(title or url, body),
+                    trusted_source=source.trusted,
+                    review_score=review_score,
+                    review_flags=review_flags,
+                    review_reason=review_reason,
                 )
             )
 

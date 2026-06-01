@@ -21,6 +21,7 @@ interface DuplicateRow {
   status: ContentStatus;
   hash: string;
   source_url: string | null;
+  title_key: string;
 }
 
 interface InsertResult {
@@ -44,6 +45,10 @@ export function rowToApiContentItem(row: ContentItemRow): ApiContentItem {
     sourceName: row.source_name,
     sourcePath: row.source_path ?? "",
     status: row.status,
+    duplicateOf: row.duplicate_of,
+    reviewScore: row.review_score,
+    reviewFlags: parseJsonArray<string>(row.review_flags_json, []),
+    reviewReason: row.review_reason,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     publishedAt: row.published_at,
@@ -129,30 +134,41 @@ export async function listCategories(db: D1Database, type?: string) {
 
 async function findDuplicate(db: D1Database, item: NormalizedContentItem) {
   const byHash = await db
-    .prepare("SELECT id, status, hash, source_url FROM content_items WHERE hash = ? LIMIT 1")
-    .bind(item.hash)
+    .prepare("SELECT id, status, hash, source_url, title_key FROM content_items WHERE hash = ? AND id <> ? LIMIT 1")
+    .bind(item.hash, item.id)
     .first<DuplicateRow>();
   if (byHash) return byHash;
 
-  if (!item.sourceUrl) return null;
+  if (item.sourceUrl) {
+    const byUrl = await db
+      .prepare("SELECT id, status, hash, source_url, title_key FROM content_items WHERE source_url = ? AND id <> ? LIMIT 1")
+      .bind(item.sourceUrl, item.id)
+      .first<DuplicateRow>();
+    if (byUrl) return byUrl;
+  }
+
+  if (!item.titleKey) return null;
   return await db
-    .prepare("SELECT id, status, hash, source_url FROM content_items WHERE source_url = ? LIMIT 1")
-    .bind(item.sourceUrl)
+    .prepare("SELECT id, status, hash, source_url, title_key FROM content_items WHERE type = ? AND title_key = ? AND id <> ? LIMIT 1")
+    .bind(item.type, item.titleKey, item.id)
     .first<DuplicateRow>();
 }
 
 export async function upsertContentItem(db: D1Database, item: NormalizedContentItem): Promise<InsertResult> {
   const duplicate = await findDuplicate(db, item);
   const nextStatus: ContentStatus = duplicate ? "duplicate" : item.status;
+  const duplicateOf = duplicate?.id ?? (item.duplicateOf || null);
   const now = new Date().toISOString();
   const publishedAt = nextStatus === "published" ? now : null;
+  const reviewedAt = item.reviewedAt || (item.reviewReason ? now : null);
 
   await db
     .prepare(
       `INSERT INTO content_items (
         id, type, title, category, tags_json, excerpt, content_md, content_html, sections_json,
-        source_url, source_name, source_path, status, hash, created_at, updated_at, published_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        source_url, source_name, source_path, status, hash, title_key, duplicate_of,
+        review_score, review_flags_json, review_reason, reviewed_at, created_at, updated_at, published_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         title = excluded.title,
         category = excluded.category,
@@ -166,6 +182,12 @@ export async function upsertContentItem(db: D1Database, item: NormalizedContentI
         source_path = excluded.source_path,
         status = excluded.status,
         hash = excluded.hash,
+        title_key = excluded.title_key,
+        duplicate_of = excluded.duplicate_of,
+        review_score = excluded.review_score,
+        review_flags_json = excluded.review_flags_json,
+        review_reason = excluded.review_reason,
+        reviewed_at = excluded.reviewed_at,
         updated_at = excluded.updated_at,
         published_at = COALESCE(content_items.published_at, excluded.published_at)`,
     )
@@ -184,6 +206,12 @@ export async function upsertContentItem(db: D1Database, item: NormalizedContentI
       item.sourcePath || null,
       nextStatus,
       item.hash,
+      item.titleKey,
+      duplicateOf,
+      item.reviewScore,
+      safeJsonArray(item.reviewFlags),
+      item.reviewReason,
+      reviewedAt,
       now,
       now,
       publishedAt,
@@ -193,7 +221,7 @@ export async function upsertContentItem(db: D1Database, item: NormalizedContentI
   return {
     id: item.id,
     status: nextStatus,
-    duplicateOf: duplicate?.id,
+    duplicateOf: duplicateOf ?? undefined,
   };
 }
 

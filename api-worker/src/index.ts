@@ -57,13 +57,14 @@ async function handleImportLocal(request: Request, env: Env) {
 
   const results = [];
   for (const input of items) {
-    const normalized = await normalizeContentInput(input, "published");
+    const normalized = await normalizeContentInput(input, "published", { honorInputStatus: true });
     results.push(await upsertContentItem(env.DB, normalized));
   }
 
   return {
     imported: results.length,
     published: results.filter((item) => item.status === "published").length,
+    rejected: results.filter((item) => item.status === "rejected").length,
     duplicates: results.filter((item) => item.status === "duplicate").length,
     items: results,
   };
@@ -81,14 +82,16 @@ async function handleCandidateBatch(request: Request, env: Env) {
 
   const results = [];
   for (const input of inputs) {
-    const normalized = await normalizeContentInput(input, "candidate");
+    const normalized = await normalizeContentInput(input, "candidate", { autoReview: true });
     results.push(await upsertContentItem(env.DB, normalized));
   }
 
   return {
     jobId: body.jobId ?? null,
     accepted: results.length,
+    published: results.filter((item) => item.status === "published").length,
     candidates: results.filter((item) => item.status === "candidate").length,
+    rejected: results.filter((item) => item.status === "rejected").length,
     duplicates: results.filter((item) => item.status === "duplicate").length,
     items: results,
   };

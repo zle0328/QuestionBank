@@ -11,6 +11,7 @@
       "tags": ["示例"],
       "sitemapUrls": ["https://example.com/sitemap.xml"],
       "startUrls": ["https://example.com/blog/"],
+      "trusted": false,
       "maxPages": 10,
       "delaySeconds": 2.0
     }

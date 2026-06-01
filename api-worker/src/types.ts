@@ -30,6 +30,12 @@ export interface ContentItemRow {
   source_path: string | null;
   status: ContentStatus;
   hash: string;
+  title_key: string;
+  duplicate_of: string | null;
+  review_score: number;
+  review_flags_json: string;
+  review_reason: string;
+  reviewed_at: string | null;
   created_at: string;
   updated_at: string;
   published_at: string | null;
@@ -55,6 +61,14 @@ export interface ContentItemInput {
   source_path?: string;
   status?: ContentStatus;
   hash?: string;
+  trustedSource?: boolean;
+  trusted_source?: boolean;
+  reviewScore?: number;
+  review_score?: number;
+  reviewFlags?: string[];
+  review_flags?: string[];
+  reviewReason?: string;
+  review_reason?: string;
 }
 
 export interface ListContentOptions {
@@ -81,6 +95,12 @@ export interface NormalizedContentItem {
   sourcePath: string;
   status: ContentStatus;
   hash: string;
+  titleKey: string;
+  duplicateOf: string;
+  reviewScore: number;
+  reviewFlags: string[];
+  reviewReason: string;
+  reviewedAt: string;
 }
 
 export interface ApiContentItem {
@@ -97,6 +117,10 @@ export interface ApiContentItem {
   sourceName: string;
   sourcePath: string;
   status: ContentStatus;
+  duplicateOf: string | null;
+  reviewScore: number;
+  reviewFlags: string[];
+  reviewReason: string;
   createdAt: string;
   updatedAt: string;
   publishedAt: string | null;
