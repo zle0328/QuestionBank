@@ -1,0 +1,43 @@
+name: Crawl Candidates
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 2 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install crawler
+        run: python -m pip install -e ./crawler
+
+      - name: Skip when no source config exists
+        id: config
+        shell: bash
+        run: |
+          if [ -f crawler/sources.json ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "crawler/sources.json not found. Copy crawler/sources.example.json and commit a reviewed source list to enable crawling."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Crawl and submit candidates
+        if: steps.config.outputs.exists == 'true'
+        env:
+          ADMIN_API_BASE_URL: ${{ secrets.ADMIN_API_BASE_URL }}
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+        run: python -m question_bank_crawler.cli --config crawler/sources.json --submit

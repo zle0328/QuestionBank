@@ -9,7 +9,7 @@ export interface ContentSection {
 export interface QuestionItem {
   id: string;
   title: string;
-  source: "code-roadmap";
+  source: "code-roadmap" | string;
   category: string;
   tags: string[];
   sourcePath: string;
@@ -22,7 +22,7 @@ export interface QuestionItem {
 export interface KnowledgeItem {
   id: string;
   title: string;
-  source: "JavaGuide";
+  source: "JavaGuide" | string;
   category: string;
   tags: string[];
   description: string;
@@ -38,6 +38,7 @@ export interface GeneratedMeta {
   knowledgeCount: number;
   questionCategories: Record<string, number>;
   knowledgeCategories: Record<string, number>;
+  dataSource?: "api" | "static";
 }
 
 export type AppMode = "questions" | "knowledge" | "favorites" | "review" | "mastered";

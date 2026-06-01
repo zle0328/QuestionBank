@@ -1,0 +1,18 @@
+{
+  "userAgent": "QuestionBankCrawler/0.1 (+https://github.com/zle0328/QuestionBank)",
+  "defaultDelaySeconds": 2.0,
+  "defaultMaxPages": 20,
+  "sources": [
+    {
+      "name": "Example Tech Blog",
+      "baseUrl": "https://example.com/",
+      "type": "knowledge",
+      "category": "后端",
+      "tags": ["示例"],
+      "sitemapUrls": ["https://example.com/sitemap.xml"],
+      "startUrls": ["https://example.com/blog/"],
+      "maxPages": 10,
+      "delaySeconds": 2.0
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+[project]
+name = "question-bank-crawler"
+version = "0.1.0"
+description = "Config-driven crawler for QuestionBank candidate content."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+question-bank-crawler = "question_bank_crawler.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

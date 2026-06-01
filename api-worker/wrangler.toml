@@ -1,0 +1,11 @@
+name = "question-bank-api"
+main = "src/index.ts"
+compatibility_date = "2025-05-25"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "question-bank-db"
+database_id = "e1b5070d-ea20-44a4-838b-88c112be980b"
+
+# Set this with `wrangler secret put ADMIN_TOKEN` instead of committing a real value.
+# ADMIN_TOKEN = ""

@@ -18,6 +18,7 @@ import {
   X,
 } from "@lucide/vue";
 import type { AppMode, GeneratedMeta, KnowledgeItem, QuestionItem } from "./types";
+import { loadContentBundle } from "./api/content";
 import { countBy, highlightMatches, searchScore } from "./utils/search";
 import { readSet, readStringArray, writeSet, writeStringArray } from "./utils/storage";
 
@@ -235,6 +236,7 @@ const visibleCount = computed(() =>
 const hasGeneratedData = computed(
   () => !isLoading.value && !loadError.value && questions.value.length > 0 && knowledge.value.length > 0,
 );
+const dataSourceLabel = computed(() => (meta.value.dataSource === "api" ? "D1 API" : "静态数据"));
 
 const hasActiveFilter = computed(() => hasSearchQuery.value || selectedCategory.value !== "全部");
 const canReturnToQuestionsFromEmpty = computed(
@@ -283,24 +285,12 @@ const emptyState = computed(() => {
   };
 });
 
-async function loadJson<T>(fileName: string): Promise<T> {
-  const response = await fetch(`${import.meta.env.BASE_URL}data/generated/${fileName}`);
-  if (!response.ok) {
-    throw new Error(`${fileName} 加载失败：${response.status}`);
-  }
-  return (await response.json()) as T;
-}
-
 async function loadGeneratedData() {
   try {
     isLoading.value = true;
     loadError.value = "";
 
-    const [loadedQuestions, loadedKnowledge, loadedMeta] = await Promise.all([
-      loadJson<QuestionItem[]>("questions.json"),
-      loadJson<KnowledgeItem[]>("knowledge.json"),
-      loadJson<GeneratedMeta>("meta.json"),
-    ]);
+    const { questions: loadedQuestions, knowledge: loadedKnowledge, meta: loadedMeta } = await loadContentBundle();
 
     questions.value = loadedQuestions;
     knowledge.value = loadedKnowledge;
@@ -537,6 +527,7 @@ function goToQuestion(offset: -1 | 1) {
       <div class="stats-strip" aria-label="数据统计">
         <span>{{ meta.questionCount || questions.length }} 题</span>
         <span>{{ meta.knowledgeCount || knowledge.length }} 篇知识</span>
+        <span>{{ dataSourceLabel }}</span>
         <span>待复习 {{ reviewIds.size }}</span>
         <span>掌握 {{ masteredPercent }}%</span>
       </div>

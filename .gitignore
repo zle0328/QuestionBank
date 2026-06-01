@@ -14,3 +14,19 @@ web/public/data/generated/*.json
 
 # Local verification artifacts
 web/screenshots/
+
+# Cloudflare Worker
+api-worker/node_modules/
+api-worker/dist/
+api-worker/.wrangler/
+api-worker/.dev.vars
+api-worker/*.local
+
+# Python crawler
+crawler/.venv/
+crawler/build/
+crawler/dist/
+crawler/*.egg-info/
+crawler/**/__pycache__/
+crawler/.pytest_cache/
+crawler/sources.json
