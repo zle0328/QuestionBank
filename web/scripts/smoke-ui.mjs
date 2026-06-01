@@ -198,18 +198,21 @@ async function main() {
     await cdp.waitFor("document.querySelector('.item-row mark') !== null");
     const searchHighlightCheck = await cdp.evaluate(`(() => ({
       hasMark: !!document.querySelector('.item-row mark'),
+      hasClearButton: !!document.querySelector('.search-clear'),
+      hasFilterSummary: document.querySelector('.filter-summary')?.innerText.includes('搜索：Java') ?? false,
       firstRowText: document.querySelector('.item-row')?.innerText ?? ''
     }))()`);
-    if (!searchHighlightCheck.hasMark || !searchHighlightCheck.firstRowText.includes("Java")) {
+    if (
+      !searchHighlightCheck.hasMark ||
+      !searchHighlightCheck.hasClearButton ||
+      !searchHighlightCheck.hasFilterSummary ||
+      !searchHighlightCheck.firstRowText.includes("Java")
+    ) {
       throw new Error(`Search highlight check failed: ${JSON.stringify(searchHighlightCheck)}`);
     }
 
-    await cdp.evaluate(`(() => {
-      const input = document.querySelector('.search-box input');
-      input.value = '';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      return true;
-    })()`);
+    await cdp.evaluate("document.querySelector('.search-clear')?.click(); true");
+    await cdp.waitFor("document.querySelector('.search-box input')?.value === '' && document.querySelector('.filter-summary') === null");
     await cdp.waitFor("document.querySelectorAll('.item-row').length > 1");
     await cdp.evaluate("document.querySelector('.item-row')?.click(); true");
     await cdp.waitFor("document.querySelector('.study-progress')?.innerText.includes('第 1')");
@@ -249,9 +252,10 @@ async function main() {
     const reviewModeCheck = await cdp.evaluate(`(() => ({
       title: document.querySelector('.list-panel .panel-heading')?.innerText ?? '',
       rowCount: document.querySelectorAll('.item-row').length,
-      stats: document.querySelector('.stats-strip')?.innerText ?? ''
+      stats: document.querySelector('.stats-strip')?.innerText ?? '',
+      hasReviewChip: document.querySelector('.state-chip.review')?.innerText.includes('待复习') ?? false
     }))()`);
-    if (!reviewModeCheck.title.includes("待复习题目") || reviewModeCheck.rowCount !== 1) {
+    if (!reviewModeCheck.title.includes("待复习题目") || reviewModeCheck.rowCount !== 1 || !reviewModeCheck.hasReviewChip) {
       throw new Error(`Review mode check failed: ${JSON.stringify(reviewModeCheck)}`);
     }
 

@@ -114,6 +114,7 @@ input:focus-visible,
 
 .search-box {
   display: flex;
+  position: relative;
   min-width: 0;
   align-items: center;
   gap: 9px;
@@ -131,6 +132,23 @@ input:focus-visible,
   border: 0;
   outline: 0;
   background: transparent;
+  color: var(--ink);
+}
+
+.search-clear {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.search-clear:hover {
+  background: var(--surface-soft);
   color: var(--ink);
 }
 
@@ -255,6 +273,35 @@ input:focus-visible,
   background: var(--surface-soft);
   color: var(--muted);
   text-align: center;
+  font-size: 12px;
+}
+
+.filter-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+  background: #fbfcfa;
+  padding: 10px 14px;
+}
+
+.filter-summary span {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  border: 1px solid rgba(15, 118, 110, 0.2);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.filter-summary .text-button {
+  min-height: 30px;
+  margin-left: auto;
+  padding: 0 9px;
   font-size: 12px;
 }
 
@@ -388,6 +435,26 @@ input:focus-visible,
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.68);
   padding: 3px 7px;
+}
+
+.meta-line .state-chip {
+  border-color: transparent;
+  font-weight: 700;
+}
+
+.state-chip.favorite {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.state-chip.review {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.state-chip.mastered {
+  background: #dcfce7;
+  color: #166534;
 }
 
 .row-actions,
@@ -543,6 +610,10 @@ mark {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.study-controls .text-button {
+  min-height: 34px;
 }
 
 .answer-gate,
@@ -902,5 +973,31 @@ mark {
 
   .detail-content h1 {
     font-size: 21px;
+  }
+
+  .study-toolbar {
+    display: grid;
+    gap: 10px;
+  }
+
+  .study-progress {
+    min-width: 0;
+  }
+
+  .study-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .study-controls .text-button {
+    width: 100%;
+    min-width: 0;
+    padding: 0 8px;
+  }
+
+  .study-controls .text-button:nth-child(3) {
+    grid-column: 1 / -1;
   }
 }

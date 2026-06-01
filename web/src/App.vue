@@ -97,6 +97,7 @@ const categoryItems = computed(() => {
 });
 
 const hasSearchQuery = computed(() => query.value.trim().length > 0);
+const trimmedQuery = computed(() => query.value.trim());
 
 function getQuestionSearchScore(item: QuestionItem) {
   return searchScore(
@@ -236,6 +237,16 @@ const hasGeneratedData = computed(
 );
 
 const hasActiveFilter = computed(() => hasSearchQuery.value || selectedCategory.value !== "全部");
+const canReturnToQuestionsFromEmpty = computed(
+  () => !hasActiveFilter.value && ["favorites", "review", "mastered"].includes(mode.value),
+);
+
+const filterSummaryItems = computed(() => {
+  const items: string[] = [];
+  if (trimmedQuery.value) items.push(`搜索：${trimmedQuery.value}`);
+  if (selectedCategory.value !== "全部") items.push(`分类：${selectedCategory.value}`);
+  return items;
+});
 
 const emptyState = computed(() => {
   if (hasActiveFilter.value) {
@@ -435,6 +446,15 @@ function resetFilters() {
   selectedCategory.value = "全部";
 }
 
+function clearSearch() {
+  query.value = "";
+}
+
+function returnToQuestions() {
+  mode.value = "questions";
+  resetFilters();
+}
+
 function isFavorite(id: string) {
   return favoriteIds.value.has(id);
 }
@@ -476,10 +496,26 @@ function goToQuestion(offset: -1 | 1) {
         </span>
       </div>
 
-      <label class="search-box">
+      <div class="search-box">
         <Search :size="18" aria-hidden="true" />
-        <input v-model="query" type="search" placeholder="搜索题目、知识点、分类或路径" />
-      </label>
+        <input
+          v-model="query"
+          type="search"
+          aria-label="搜索题目、知识点、分类或路径"
+          placeholder="搜索题目、知识点、分类或路径"
+          @keydown.esc="clearSearch"
+        />
+        <button
+          v-if="query"
+          class="search-clear"
+          type="button"
+          aria-label="清空搜索"
+          title="清空搜索"
+          @click="clearSearch"
+        >
+          <X :size="16" />
+        </button>
+      </div>
 
       <button class="icon-button mobile-only" type="button" aria-label="打开筛选" @click="mobileFiltersOpen = true">
         <Menu :size="20" />
@@ -565,9 +601,20 @@ function goToQuestion(offset: -1 | 1) {
             <RotateCcw :size="16" aria-hidden="true" />
             重置筛选
           </button>
+          <button v-else-if="canReturnToQuestionsFromEmpty" type="button" class="text-button" @click="returnToQuestions">
+            <LibraryBig :size="16" aria-hidden="true" />
+            去题库
+          </button>
         </div>
 
         <template v-else-if="isQuestionMode">
+          <div v-if="filterSummaryItems.length" class="filter-summary">
+            <span v-for="item in filterSummaryItems" :key="item">{{ item }}</span>
+            <button type="button" class="text-button" @click="resetFilters">
+              <RotateCcw :size="15" aria-hidden="true" />
+              清空
+            </button>
+          </div>
           <article
             v-for="item in filteredQuestions"
             :key="item.id"
@@ -585,6 +632,9 @@ function goToQuestion(offset: -1 | 1) {
               <div class="meta-line">
                 <span v-html="highlighted(item.category)"></span>
                 <span v-if="item.tags.length" v-html="highlighted(item.tags.slice(0, 3).join(' / '))"></span>
+                <span v-if="isMastered(item.id)" class="state-chip mastered">已掌握</span>
+                <span v-else-if="isReview(item.id)" class="state-chip review">待复习</span>
+                <span v-if="isFavorite(item.id)" class="state-chip favorite">已收藏</span>
               </div>
             </div>
             <div class="row-actions">
@@ -593,6 +643,7 @@ function goToQuestion(offset: -1 | 1) {
                 class="icon-button"
                 :class="{ selected: isFavorite(item.id) }"
                 :aria-label="isFavorite(item.id) ? '取消收藏' : '收藏题目'"
+                :title="isFavorite(item.id) ? '取消收藏' : '收藏题目'"
                 @click.stop="toggleFavorite(item.id)"
               >
                 <Star :size="17" />
@@ -602,6 +653,7 @@ function goToQuestion(offset: -1 | 1) {
                 class="icon-button"
                 :class="{ selected: isReview(item.id) }"
                 :aria-label="isReview(item.id) ? '移出待复习' : '加入待复习'"
+                :title="isReview(item.id) ? '移出待复习' : '加入待复习'"
                 @click.stop="toggleReview(item.id)"
               >
                 <Clock3 :size="17" />
@@ -611,6 +663,7 @@ function goToQuestion(offset: -1 | 1) {
                 class="icon-button"
                 :class="{ selected: isMastered(item.id) }"
                 :aria-label="isMastered(item.id) ? '取消已掌握' : '标记已掌握'"
+                :title="isMastered(item.id) ? '取消已掌握' : '标记已掌握'"
                 @click.stop="toggleMastered(item.id)"
               >
                 <CheckCircle2 :size="17" />
@@ -620,6 +673,13 @@ function goToQuestion(offset: -1 | 1) {
         </template>
 
         <template v-else>
+          <div v-if="filterSummaryItems.length" class="filter-summary">
+            <span v-for="item in filterSummaryItems" :key="item">{{ item }}</span>
+            <button type="button" class="text-button" @click="resetFilters">
+              <RotateCcw :size="15" aria-hidden="true" />
+              清空
+            </button>
+          </div>
           <article
             v-for="item in filteredKnowledge"
             :key="item.id"
@@ -665,6 +725,7 @@ function goToQuestion(offset: -1 | 1) {
                 class="icon-button"
                 :class="{ selected: isFavorite(activeQuestion.id) }"
                 :aria-label="isFavorite(activeQuestion.id) ? '取消收藏' : '收藏题目'"
+                :title="isFavorite(activeQuestion.id) ? '取消收藏' : '收藏题目'"
                 @click="toggleFavorite(activeQuestion.id)"
               >
                 <Star :size="18" />
@@ -674,6 +735,7 @@ function goToQuestion(offset: -1 | 1) {
                 class="icon-button"
                 :class="{ selected: isReview(activeQuestion.id) }"
                 :aria-label="isReview(activeQuestion.id) ? '移出待复习' : '加入待复习'"
+                :title="isReview(activeQuestion.id) ? '移出待复习' : '加入待复习'"
                 @click="toggleReview(activeQuestion.id)"
               >
                 <Clock3 :size="18" />
@@ -683,6 +745,7 @@ function goToQuestion(offset: -1 | 1) {
                 class="icon-button"
                 :class="{ selected: isMastered(activeQuestion.id) }"
                 :aria-label="isMastered(activeQuestion.id) ? '取消已掌握' : '标记已掌握'"
+                :title="isMastered(activeQuestion.id) ? '取消已掌握' : '标记已掌握'"
                 @click="toggleMastered(activeQuestion.id)"
               >
                 <CheckCircle2 :size="18" />
@@ -717,9 +780,27 @@ function goToQuestion(offset: -1 | 1) {
                 下一题
                 <ChevronRight :size="16" aria-hidden="true" />
               </button>
-              <button type="button" class="text-button" :class="{ selected: isReview(activeQuestion.id) }" @click="toggleReview(activeQuestion.id)">
+              <button type="button" class="text-button" @click="toggleReveal(activeQuestion.id)">
+                <ChevronDown :size="16" aria-hidden="true" />
+                {{ isRevealed(activeQuestion.id) ? "隐藏答案" : "查看答案" }}
+              </button>
+              <button
+                type="button"
+                class="text-button"
+                :class="{ selected: isReview(activeQuestion.id) }"
+                @click="toggleReview(activeQuestion.id)"
+              >
                 <Clock3 :size="16" aria-hidden="true" />
                 {{ isReview(activeQuestion.id) ? "移出复习" : "加入复习" }}
+              </button>
+              <button
+                type="button"
+                class="text-button"
+                :class="{ selected: isMastered(activeQuestion.id) }"
+                @click="toggleMastered(activeQuestion.id)"
+              >
+                <CheckCircle2 :size="16" aria-hidden="true" />
+                {{ isMastered(activeQuestion.id) ? "取消掌握" : "标记掌握" }}
               </button>
             </div>
           </div>
