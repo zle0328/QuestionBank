@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from question_bank_crawler.cli import main
 from question_bank_crawler.config import load_config
 from question_bank_crawler.crawler import crawl_source
 from question_bank_crawler.extract import content_hash, parse_html
@@ -122,6 +123,35 @@ class CrawlerTests(unittest.TestCase):
         self.assertEqual(result.candidates[0].category, "后端")
         self.assertEqual(result.candidates[0].tags, ["Redis"])
         self.assertEqual(result.failures, [])
+
+    def test_submit_with_no_candidates_exits_successfully(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "sources.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "userAgent": "QuestionBankCrawler/Test",
+                        "sources": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch("question_bank_crawler.cli.submit_candidates") as submit_candidates:
+                exit_code = main(
+                    [
+                        "--config",
+                        str(path),
+                        "--submit",
+                        "--api-base-url",
+                        "https://worker.example",
+                        "--admin-token",
+                        "secret",
+                    ]
+                )
+
+        submit_candidates.assert_not_called()
+        self.assertEqual(exit_code, 0)
 
 
 if __name__ == "__main__":

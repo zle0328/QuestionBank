@@ -35,6 +35,10 @@ def main(argv: list[str] | None = None) -> int:
         print(candidates_to_json(candidates))
         return 0
 
+    if not candidates:
+        print("No candidates discovered; skipping submit.")
+        return 0
+
     if not args.api_base_url or not args.admin_token:
         print("--api-base-url/ADMIN_API_BASE_URL and --admin-token/ADMIN_TOKEN are required when --submit is used.", file=sys.stderr)
         return 2
