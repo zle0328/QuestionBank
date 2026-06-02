@@ -61,7 +61,28 @@ async function loadStaticJson<T>(fileName: string): Promise<T> {
   return fetchJson<T>(`${STATIC_DATA_BASE}/${fileName}`);
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export function plainTextToHtml(value: string): string {
+  return value
+    .split(/\n+/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => `<p>${escapeHtml(block)}</p>`)
+    .join("");
+}
+
 function apiItemToQuestion(item: ApiContentItem): QuestionItem {
+  const content = item.content ?? "";
+  const contentHtml = item.contentHtml || plainTextToHtml(content);
+
   return {
     id: item.id,
     title: item.title,
@@ -69,16 +90,16 @@ function apiItemToQuestion(item: ApiContentItem): QuestionItem {
     category: item.category || "未分类",
     tags: item.tags ?? [],
     sourcePath: item.sourcePath || item.sourceUrl || "",
-    content: item.content ?? "",
-    contentHtml: item.contentHtml ?? "",
+    content,
+    contentHtml,
     sections: item.sections?.length
       ? item.sections
       : [
           {
             title: "题解",
             level: 2,
-            content: item.content ?? "",
-            html: item.contentHtml ?? "",
+            content,
+            html: contentHtml,
             excerpt: item.excerpt ?? "",
           },
         ],
@@ -87,6 +108,9 @@ function apiItemToQuestion(item: ApiContentItem): QuestionItem {
 }
 
 function apiItemToKnowledge(item: ApiContentItem): KnowledgeItem {
+  const content = item.content ?? "";
+  const contentHtml = item.contentHtml || plainTextToHtml(content);
+
   return {
     id: item.id,
     title: item.title,
@@ -95,8 +119,8 @@ function apiItemToKnowledge(item: ApiContentItem): KnowledgeItem {
     tags: item.tags ?? [],
     description: item.excerpt ?? "",
     sourcePath: item.sourcePath || item.sourceUrl || "",
-    content: item.content ?? "",
-    contentHtml: item.contentHtml ?? "",
+    content,
+    contentHtml,
     excerpt: item.excerpt ?? "",
   };
 }

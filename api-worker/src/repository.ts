@@ -22,6 +22,7 @@ interface DuplicateRow {
   hash: string;
   source_url: string | null;
   title_key: string;
+  reason?: "hash" | "source_url" | "title_key";
 }
 
 interface InsertResult {
@@ -137,27 +138,36 @@ async function findDuplicate(db: D1Database, item: NormalizedContentItem) {
     .prepare("SELECT id, status, hash, source_url, title_key FROM content_items WHERE hash = ? AND id <> ? LIMIT 1")
     .bind(item.hash, item.id)
     .first<DuplicateRow>();
-  if (byHash) return byHash;
+  if (byHash) return { ...byHash, reason: "hash" as const };
 
   if (item.sourceUrl) {
     const byUrl = await db
       .prepare("SELECT id, status, hash, source_url, title_key FROM content_items WHERE source_url = ? AND id <> ? LIMIT 1")
       .bind(item.sourceUrl, item.id)
       .first<DuplicateRow>();
-    if (byUrl) return byUrl;
+    if (byUrl) return { ...byUrl, reason: "source_url" as const };
   }
 
   if (!item.titleKey) return null;
-  return await db
+  const byTitle = await db
     .prepare("SELECT id, status, hash, source_url, title_key FROM content_items WHERE type = ? AND title_key = ? AND id <> ? LIMIT 1")
     .bind(item.type, item.titleKey, item.id)
     .first<DuplicateRow>();
+  return byTitle ? { ...byTitle, reason: "title_key" as const } : null;
 }
 
 export async function upsertContentItem(db: D1Database, item: NormalizedContentItem): Promise<InsertResult> {
   const duplicate = await findDuplicate(db, item);
-  const nextStatus: ContentStatus = duplicate ? "duplicate" : item.status;
-  const duplicateOf = duplicate?.id ?? (item.duplicateOf || null);
+  const shouldUpdateExistingUrl = duplicate?.reason === "source_url";
+  const targetId = shouldUpdateExistingUrl ? duplicate.id : item.id;
+  const nextStatus: ContentStatus = shouldUpdateExistingUrl
+    ? duplicate.status === "published"
+      ? "published"
+      : item.status
+    : duplicate
+      ? "duplicate"
+      : item.status;
+  const duplicateOf = duplicate && !shouldUpdateExistingUrl ? duplicate.id : item.duplicateOf || null;
   const now = new Date().toISOString();
   const publishedAt = nextStatus === "published" ? now : null;
   const reviewedAt = item.reviewedAt || (item.reviewReason ? now : null);
@@ -192,7 +202,7 @@ export async function upsertContentItem(db: D1Database, item: NormalizedContentI
         published_at = COALESCE(content_items.published_at, excluded.published_at)`,
     )
     .bind(
-      item.id,
+      targetId,
       item.type,
       item.title,
       item.category,
@@ -219,7 +229,7 @@ export async function upsertContentItem(db: D1Database, item: NormalizedContentI
     .run();
 
   return {
-    id: item.id,
+    id: targetId,
     status: nextStatus,
     duplicateOf: duplicateOf ?? undefined,
   };

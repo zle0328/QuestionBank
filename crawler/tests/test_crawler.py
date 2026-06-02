@@ -69,6 +69,55 @@ class CrawlerTests(unittest.TestCase):
         self.assertIn("Redis 常见数据结构", body)
         self.assertIn("https://docs.example/redis/lock", links)
 
+    def test_parse_vitepress_page_prefers_article_body_over_navigation(self) -> None:
+        html = """
+        <html>
+          <head><title>如何从大量的 URL 中找出相同的 URL？ | advanced-java</title></head>
+          <body>
+            <div id="app">
+              <a class="VPSkipLink" href="#VPContent">Skip to content</a>
+              <header class="VPNav">
+                <button class="VPNavBarSearchButton">Search ⌘ Ctrl K</button>
+                <nav class="VPNavBarMenu">Main Navigation 首页 高并发架构 分布式系统</nav>
+              </header>
+              <aside class="VPSidebar">
+                <nav>Sidebar Navigation 高并发架构 消息队列 为什么使用消息队列？</nav>
+              </aside>
+              <main id="VPContent" class="VPContent">
+                <div class="VPDoc">
+                  <div class="container">
+                    <div class="content">
+                      <div class="content-container">
+                        <div class="vp-doc">
+                          <h1>如何从大量的 URL 中找出相同的 URL？</h1>
+                          <p>题目：给定 a、b 两个文件，各存放 50 亿个 URL，每个 URL 各占 64B，内存限制是 4G。</p>
+                          <p>方案一：采用分治策略。遍历文件 a，对每个 URL 求 hash 后取模，将 URL 分散到 1000 个小文件中。</p>
+                          <p>方案二：对每个小文件使用 HashSet 统计，再与另一个文件中对应的小文件做交集判断。</p>
+                          <h2>方法总结</h2>
+                          <p>核心思路是先切分降低内存压力，再用集合或前缀树完成去重和匹配。</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </main>
+              <footer class="VPFooter">Released under the CC-BY-SA-4.0 license.</footer>
+            </div>
+          </body>
+        </html>
+        """
+
+        title, body, links = parse_html(html, "https://java.doocs.org/big-data/find-common-urls")
+
+        self.assertEqual(title, "如何从大量的 URL 中找出相同的 URL？")
+        self.assertIn("给定 a、b 两个文件", body)
+        self.assertIn("采用分治策略", body)
+        self.assertIn("核心思路是先切分降低内存压力", body)
+        self.assertNotIn("Skip to content", body)
+        self.assertNotIn("Main Navigation", body)
+        self.assertNotIn("Sidebar Navigation", body)
+        self.assertGreater(len(body), 180)
+
     def test_content_hash_is_stable_for_whitespace(self) -> None:
         left = content_hash("Java 线程池", "核心线程数  和  队列")
         right = content_hash("Java 线程池", "核心线程数 和 队列")

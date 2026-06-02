@@ -278,6 +278,60 @@ describe("question bank api worker", () => {
     await expect(json(secondResponse)).resolves.toMatchObject({ accepted: 1, candidates: 1, duplicates: 0 });
   });
 
+  it("updates existing content when the same source url is recrawled", async () => {
+    const env = makeEnv();
+    const oldContent = "Skip to content Main Navigation Sidebar Navigation 高并发架构 消息队列。";
+    const newContent = "Java 高并发面试文章正文，完整讲解消息队列、Redis 缓存、MySQL 索引、分布式锁和系统设计。".repeat(40);
+
+    await handleRequest(
+      adminPost("/api/admin/import-local", {
+        knowledge: [
+          {
+            id: "old-nav-summary",
+            title: "如何从大量的 URL 中找出相同的 URL？ | advanced-java",
+            category: "Java后端进阶",
+            content: oldContent,
+            sourceUrl: "https://java.doocs.org/big-data/find-common-urls",
+            status: "published",
+          },
+        ],
+      }),
+      env,
+    );
+
+    const response = await handleRequest(
+      adminPost("/api/admin/candidates/batch", {
+        items: [
+          {
+            id: "new-full-article",
+            type: "knowledge",
+            title: "如何从大量的 URL 中找出相同的 URL？",
+            category: "Java后端进阶",
+            contentMd: newContent,
+            sourceName: "Doocs advanced-java",
+            sourceUrl: "https://java.doocs.org/big-data/find-common-urls",
+            trustedSource: true,
+          },
+        ],
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(json(response)).resolves.toMatchObject({ accepted: 1, published: 1, duplicates: 0 });
+
+    const listResponse = await handleRequest(apiRequest("/api/content?type=knowledge&q=大量"), env);
+    const listBody = await json(listResponse);
+    expect(listBody).toMatchObject({ total: 1 });
+    expect(listBody.items).toEqual([
+      expect.objectContaining({
+        id: "old-nav-summary",
+        title: "如何从大量的 URL 中找出相同的 URL？",
+        content: expect.stringContaining("完整讲解消息队列"),
+      }),
+    ]);
+  });
+
   it("returns published categories by type", async () => {
     const env = makeEnv();
     await handleRequest(
