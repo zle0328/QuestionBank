@@ -11,6 +11,7 @@ class SourceConfig:
     name: str
     base_url: str
     type: ContentType = "knowledge"
+    auto_type: bool = False
     category: str = "未分类"
     tags: list[str] = field(default_factory=list)
     sitemap_urls: list[str] = field(default_factory=list)

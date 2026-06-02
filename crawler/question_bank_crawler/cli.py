@@ -7,6 +7,14 @@ import sys
 from .client import candidates_to_json, submit_candidates
 from .config import load_config
 from .crawler import crawl_all
+from .models import CandidateItem
+
+
+def summarize_candidate_types(candidates: list[CandidateItem]) -> dict[str, int]:
+    return {
+        "question": sum(1 for item in candidates if getattr(item, "type", None) == "question"),
+        "knowledge": sum(1 for item in candidates if getattr(item, "type", None) == "knowledge"),
+    }
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -27,10 +35,16 @@ def main(argv: list[str] | None = None) -> int:
     results = crawl_all(config, limit=args.limit)
     candidates = [item for result in results for item in result.candidates]
     failures = [failure for result in results for failure in result.failures]
+    type_counts = summarize_candidate_types(candidates)
 
-    print(f"candidates={len(candidates)} failures={len(failures)}")
+    print(
+        f"candidates={len(candidates)} "
+        f"questions={type_counts['question']} "
+        f"knowledge={type_counts['knowledge']} "
+        f"failures={len(failures)}"
+    )
     for failure in failures[:20]:
-      print(f"failure url={failure.url} reason={failure.reason}", file=sys.stderr)
+        print(f"failure url={failure.url} reason={failure.reason}", file=sys.stderr)
 
     if args.dry_run or not args.submit:
         print(candidates_to_json(candidates))

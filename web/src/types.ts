@@ -38,7 +38,7 @@ export interface GeneratedMeta {
   knowledgeCount: number;
   questionCategories: Record<string, number>;
   knowledgeCategories: Record<string, number>;
-  dataSource?: "api" | "static";
+  dataSource?: "api" | "static" | "mixed";
 }
 
 export type AppMode = "questions" | "knowledge" | "favorites" | "review" | "mastered";

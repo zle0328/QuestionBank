@@ -4,6 +4,17 @@
   "defaultMaxPages": 20,
   "sources": [
     {
+      "name": "Example Interview Questions",
+      "baseUrl": "https://example.com/interview-questions/",
+      "category": "面试题",
+      "tags": ["示例", "面试"],
+      "sitemapUrls": ["https://example.com/sitemap.xml"],
+      "startUrls": ["https://example.com/interview-questions/"],
+      "trusted": false,
+      "maxPages": 10,
+      "delaySeconds": 2.0
+    },
+    {
       "name": "Example Tech Blog",
       "baseUrl": "https://example.com/",
       "type": "knowledge",

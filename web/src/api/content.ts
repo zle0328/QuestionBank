@@ -147,8 +147,28 @@ async function loadFromApi(): Promise<ContentBundle> {
   await Promise.all([fetchJson(apiUrl("/api/categories?type=question")), fetchJson(apiUrl("/api/categories?type=knowledge"))]);
 
   const [apiQuestions, apiKnowledge] = await Promise.all([fetchApiContent("question"), fetchApiContent("knowledge")]);
-  const questions = apiQuestions.map(apiItemToQuestion);
-  const knowledge = apiKnowledge.map(apiItemToKnowledge);
+  const mappedQuestions = apiQuestions.map(apiItemToQuestion);
+  const mappedKnowledge = apiKnowledge.map(apiItemToKnowledge);
+
+  if (mappedQuestions.length > 0 && mappedKnowledge.length > 0) {
+    return {
+      questions: mappedQuestions,
+      knowledge: mappedKnowledge,
+      meta: {
+        generatedAt: new Date().toISOString(),
+        questionCount: mappedQuestions.length,
+        knowledgeCount: mappedKnowledge.length,
+        questionCategories: countBy(mappedQuestions, (item) => item.category),
+        knowledgeCategories: countBy(mappedKnowledge, (item) => item.category),
+        dataSource: "api",
+      },
+    };
+  }
+
+  const staticBundle = await loadFromStatic();
+  const questions = mappedQuestions.length > 0 ? mappedQuestions : staticBundle.questions;
+  const knowledge = mappedKnowledge.length > 0 ? mappedKnowledge : staticBundle.knowledge;
+  const dataSource = mappedQuestions.length === 0 && mappedKnowledge.length === 0 ? "static" : "mixed";
 
   return {
     questions,
@@ -159,7 +179,7 @@ async function loadFromApi(): Promise<ContentBundle> {
       knowledgeCount: knowledge.length,
       questionCategories: countBy(questions, (item) => item.category),
       knowledgeCategories: countBy(knowledge, (item) => item.category),
-      dataSource: "api",
+      dataSource,
     },
   };
 }

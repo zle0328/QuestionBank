@@ -236,7 +236,11 @@ const visibleCount = computed(() =>
 const hasGeneratedData = computed(
   () => !isLoading.value && !loadError.value && questions.value.length > 0 && knowledge.value.length > 0,
 );
-const dataSourceLabel = computed(() => (meta.value.dataSource === "api" ? "D1 API" : "静态数据"));
+const dataSourceLabel = computed(() => {
+  if (meta.value.dataSource === "api") return "D1 API";
+  if (meta.value.dataSource === "mixed") return "API+静态";
+  return "静态数据";
+});
 
 const hasActiveFilter = computed(() => hasSearchQuery.value || selectedCategory.value !== "全部");
 const canReturnToQuestionsFromEmpty = computed(

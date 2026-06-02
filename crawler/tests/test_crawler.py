@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from question_bank_crawler.cli import main
+from question_bank_crawler.cli import main, summarize_candidate_types
 from question_bank_crawler.client import submit_candidates
 from question_bank_crawler.config import load_config
 from question_bank_crawler.crawler import crawl_source
@@ -46,8 +46,32 @@ class CrawlerTests(unittest.TestCase):
 
         self.assertEqual(config.user_agent, "QuestionBankCrawler/Test")
         self.assertEqual(config.sources[0].type, "question")
+        self.assertFalse(config.sources[0].auto_type)
         self.assertEqual(config.sources[0].category, "Java")
         self.assertEqual(config.sources[0].tags, ["JVM", "面试"])
+
+    def test_load_config_infers_question_source_when_type_is_omitted(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "sources.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "sources": [
+                            {
+                                "name": "Java 面试题库",
+                                "baseUrl": "https://docs.example/interview-questions/",
+                                "category": "Java 面试题",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            config = load_config(path)
+
+        self.assertEqual(config.sources[0].type, "question")
+        self.assertTrue(config.sources[0].auto_type)
 
     def test_parse_html_extracts_title_text_and_links(self) -> None:
         html = """
@@ -182,6 +206,32 @@ class CrawlerTests(unittest.TestCase):
 
         self.assertEqual(left, right)
 
+    def test_summarize_candidate_types_counts_questions_and_knowledge(self) -> None:
+        question = CandidateItem(
+            type="question",
+            title="Java 线程池怎么配置？",
+            category="Java",
+            tags=["线程池"],
+            excerpt="线程池参数配置。",
+            content_md="线程池参数配置。",
+            source_url="https://docs.example/thread-pool",
+            source_name="Docs",
+            hash="hash-question",
+        )
+        knowledge = CandidateItem(
+            type="knowledge",
+            title="Redis 基础",
+            category="数据库",
+            tags=["Redis"],
+            excerpt="Redis 基础。",
+            content_md="Redis 基础。",
+            source_url="https://docs.example/redis",
+            source_name="Docs",
+            hash="hash-knowledge",
+        )
+
+        self.assertEqual(summarize_candidate_types([question, knowledge, question]), {"question": 2, "knowledge": 1})
+
     def test_robots_blocking_skips_fetch(self) -> None:
         source = SourceConfig(name="Docs", base_url="https://docs.example/", max_pages=1, delay_seconds=0)
         config = CrawlerConfig(user_agent="QuestionBankCrawler/Test", default_delay_seconds=0)
@@ -231,6 +281,59 @@ class CrawlerTests(unittest.TestCase):
         self.assertEqual(result.candidates[0].category, "后端")
         self.assertEqual(result.candidates[0].tags, ["Redis"])
         self.assertEqual(result.failures, [])
+
+    def test_auto_typed_source_promotes_interview_question_candidate(self) -> None:
+        source = SourceConfig(
+            name="Auto",
+            base_url="https://docs.example/",
+            type="knowledge",
+            auto_type=True,
+            category="Java",
+            max_pages=1,
+            delay_seconds=0,
+        )
+        config = CrawlerConfig(user_agent="QuestionBankCrawler/Test", default_delay_seconds=0)
+        paragraph = "回答重点：线程池面试会考核心线程数、最大线程数、队列、拒绝策略和监控。"
+        html = f"<html><head><title>Java 线程池核心参数怎么配置？</title></head><body><article><h1>Java 线程池面试题</h1><p>{paragraph * 8}</p></article></body></html>"
+
+        class Robots:
+            def can_fetch(self, user_agent: str, url: str) -> bool:
+                return True
+
+        with (
+            patch("question_bank_crawler.crawler.load_robots", return_value=Robots()),
+            patch("question_bank_crawler.crawler.seed_urls", return_value=(["https://docs.example/java/thread-pool-interview"], [])),
+            patch("question_bank_crawler.crawler.fetch_text", return_value=html),
+        ):
+            result = crawl_source(source, config)
+
+        self.assertEqual(result.candidates[0].type, "question")
+
+    def test_explicit_knowledge_source_keeps_configured_type(self) -> None:
+        source = SourceConfig(
+            name="Docs",
+            base_url="https://docs.example/",
+            type="knowledge",
+            category="Java",
+            max_pages=1,
+            delay_seconds=0,
+        )
+        config = CrawlerConfig(user_agent="QuestionBankCrawler/Test", default_delay_seconds=0)
+        paragraph = "回答重点：线程池面试会考核心线程数、最大线程数、队列、拒绝策略和监控。"
+        html = f"<html><head><title>Java 线程池面试题</title></head><body><article><p>{paragraph * 8}</p></article></body></html>"
+
+        class Robots:
+            def can_fetch(self, user_agent: str, url: str) -> bool:
+                return True
+
+        with (
+            patch("question_bank_crawler.crawler.load_robots", return_value=Robots()),
+            patch("question_bank_crawler.crawler.seed_urls", return_value=(["https://docs.example/java/thread-pool-interview"], [])),
+            patch("question_bank_crawler.crawler.fetch_text", return_value=html),
+        ):
+            result = crawl_source(source, config)
+
+        self.assertEqual(result.candidates[0].type, "knowledge")
 
     def test_submit_with_no_candidates_exits_successfully(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

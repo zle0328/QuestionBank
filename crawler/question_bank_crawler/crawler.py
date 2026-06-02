@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 from collections import deque
 from urllib.error import HTTPError, URLError
@@ -33,6 +34,20 @@ TECH_KEYWORDS = [
     "面试",
     "题",
 ]
+QUESTION_URL_HINTS = [
+    "interview",
+    "interview-question",
+    "interview-questions",
+    "question",
+    "questions",
+    "mian-shi",
+    "mianshi",
+    "面试",
+    "面试题",
+    "题库",
+]
+QUESTION_TITLE_HINTS = ["面试题", "题库", "问答", "常见问题", "高频题", "自测题"]
+QUESTION_BODY_HINTS = ["回答重点", "题目：", "题解", "面试官：", "候选人：", "常考", "高频面试"]
 
 
 def _robots_url(base_url: str) -> str:
@@ -96,6 +111,31 @@ def review_content(source: SourceConfig, title: str, body: str) -> tuple[int, li
     return final_score, flags, f"crawler_rule_score={final_score}; trusted={source.trusted}; length={text_length}; flags={','.join(flags) or 'none'}"
 
 
+def infer_candidate_type(source: SourceConfig, url: str, title: str, body: str):
+    if not source.auto_type:
+        return source.type
+
+    normalized_url = url.lower()
+    normalized_title = title.lower()
+    normalized_body = body.lower()
+    score = 2 if source.type == "question" else 0
+
+    if any(hint in normalized_url for hint in QUESTION_URL_HINTS):
+        score += 2
+    if any(hint in normalized_title for hint in QUESTION_TITLE_HINTS):
+        score += 3
+    if "？" in title or "?" in title:
+        score += 1
+    if any(hint.lower() in normalized_body for hint in QUESTION_BODY_HINTS):
+        score += 3
+    if len(re.findall(r"^#{2,4}\s+.+[？?]", body, flags=re.MULTILINE)) >= 2:
+        score += 2
+    if len(re.findall(r"面试官\s*[：:]", body)) >= 2:
+        score += 3
+
+    return "question" if score >= 3 else "knowledge"
+
+
 def crawl_source(source: SourceConfig, config: CrawlerConfig, limit: int | None = None) -> CrawlResult:
     max_pages = limit or source.max_pages or config.default_max_pages
     delay = source.delay_seconds if source.delay_seconds is not None else config.default_delay_seconds
@@ -137,7 +177,7 @@ def crawl_source(source: SourceConfig, config: CrawlerConfig, limit: int | None 
             review_score, review_flags, review_reason = review_content(source, title or url, body)
             candidates.append(
                 CandidateItem(
-                    type=source.type,
+                    type=infer_candidate_type(source, url, title or url, body),
                     title=title or url,
                     category=source.category,
                     tags=source.tags,
