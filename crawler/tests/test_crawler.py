@@ -118,6 +118,64 @@ class CrawlerTests(unittest.TestCase):
         self.assertNotIn("Sidebar Navigation", body)
         self.assertGreater(len(body), 180)
 
+    def test_parse_html_preserves_markdown_structure(self) -> None:
+        html = """
+        <html>
+          <head><title>Java 线程池面试题</title></head>
+          <body>
+            <article class="markdown-body">
+              <h1>Java 线程池面试题</h1>
+              <p>线程池用于复用线程，降低创建和销毁线程的开销。</p>
+              <h2>回答重点</h2>
+              <ul>
+                <li>核心线程数、最大线程数和队列容量需要结合任务类型配置。</li>
+                <li>拒绝策略要结合业务降级或告警处理。</li>
+              </ul>
+              <blockquote>面试时要主动说明监控和压测。</blockquote>
+              <pre><code>ExecutorService pool = Executors.newFixedThreadPool(8);</code></pre>
+              <p>更多参考 <a href="/java/thread-pool">线程池详解</a>。</p>
+            </article>
+          </body>
+        </html>
+        """
+
+        title, body, links = parse_html(html, "https://docs.example/java/thread-pool-interview")
+
+        self.assertEqual(title, "Java 线程池面试题")
+        self.assertIn("## 回答重点", body)
+        self.assertIn("- 核心线程数、最大线程数和队列容量需要结合任务类型配置。", body)
+        self.assertIn("> 面试时要主动说明监控和压测。", body)
+        self.assertIn("```", body)
+        self.assertIn("ExecutorService pool", body)
+        self.assertIn("[线程池详解](https://docs.example/java/thread-pool)", body)
+        self.assertIn("https://docs.example/java/thread-pool", links)
+
+    def test_parse_interview_dialogue_promotes_questions_to_sections(self) -> None:
+        html = """
+        <html>
+          <head><title>消息队列面试场景</title></head>
+          <body>
+            <main class="vp-doc">
+              <h1>消息队列面试场景</h1>
+              <p>面试官：你在系统里用过消息队列吗？</p>
+              <p>候选人：用过，我们在订单系统里发送订单消息。</p>
+              <p>面试官：那你们为什么使用消息队列啊？</p>
+              <p>候选人：主要是异步解耦、削峰填谷和提升系统吞吐量。</p>
+              <p>面试官：如何保证消息不被重复消费啊？</p>
+              <p>候选人：消费端要设计幂等，例如用唯一业务键做去重。</p>
+            </main>
+          </body>
+        </html>
+        """
+
+        title, body, _ = parse_html(html, "https://java.doocs.org/high-concurrency/mq-interview")
+
+        self.assertEqual(title, "消息队列面试场景")
+        self.assertIn("## 你在系统里用过消息队列吗？", body)
+        self.assertIn("## 那你们为什么使用消息队列啊？", body)
+        self.assertIn("## 如何保证消息不被重复消费啊？", body)
+        self.assertIn("> 候选人：主要是异步解耦、削峰填谷和提升系统吞吐量。", body)
+
     def test_content_hash_is_stable_for_whitespace(self) -> None:
         left = content_hash("Java 线程池", "核心线程数  和  队列")
         right = content_hash("Java 线程池", "核心线程数 和 队列")

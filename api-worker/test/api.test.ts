@@ -146,7 +146,17 @@ describe("question bank api worker", () => {
 
   it("auto-publishes trusted high quality candidates", async () => {
     const env = makeEnv();
-    const content = "Java 高并发系统面试中，经常会考线程池、Redis 缓存、MySQL 索引、消息队列和分布式锁。".repeat(40);
+    const content = [
+      "Java 高并发系统面试中，经常会考线程池、Redis 缓存、MySQL 索引、消息队列和分布式锁。",
+      "",
+      "## 回答重点",
+      "- 线程池要关注核心线程数、队列、拒绝策略和监控。",
+      "- Redis 缓存要关注穿透、击穿、雪崩和一致性。",
+      "- MySQL 索引要关注 B+ 树、回表、覆盖索引和慢查询。",
+      "",
+      "## 扩展知识",
+      "分布式锁和消息队列通常会结合幂等、重试、顺序性和可靠性一起考察。",
+    ].join("\n");
 
     const response = await handleRequest(
       adminPost("/api/admin/candidates/batch", {
@@ -173,6 +183,95 @@ describe("question bank api worker", () => {
     const listResponse = await handleRequest(apiRequest("/api/content?type=knowledge&q=高并发"), env);
     const listBody = await json(listResponse);
     expect(listBody).toMatchObject({ total: 1 });
+  });
+
+  it("keeps trusted but weakly structured crawler content as candidate", async () => {
+    const env = makeEnv();
+    const content = "Java 微服务架构文章正文，篇幅很长，涉及 Spring、Redis、MySQL、分布式、缓存、数据库、消息队列和面试经验。".repeat(50);
+
+    const response = await handleRequest(
+      adminPost("/api/admin/candidates/batch", {
+        items: [
+          {
+            id: "weak-structure-longform",
+            type: "knowledge",
+            title: "Java 微服务架构长文",
+            category: "Java后端进阶",
+            contentMd: content,
+            sourceName: "Doocs advanced-java",
+            sourceUrl: "https://java.doocs.org/micro-services/longform",
+            trustedSource: true,
+          },
+        ],
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    const body = await json(response);
+    expect(body).toMatchObject({ accepted: 1, published: 0, candidates: 1, rejected: 0 });
+    expect(body.items).toEqual([
+      expect.objectContaining({
+        id: "weak-structure-longform",
+        status: "candidate",
+      }),
+    ]);
+
+    const listResponse = await handleRequest(apiRequest("/api/content?type=knowledge&q=微服务"), env);
+    const listBody = await json(listResponse);
+    expect(listBody).toMatchObject({ total: 0 });
+  });
+
+  it("normalizes crawler markdown into html and sections", async () => {
+    const env = makeEnv();
+    const content = [
+      "Java 线程池用于复用线程，降低频繁创建和销毁线程的开销，是后端面试高频知识点。",
+      "",
+      "## 回答重点",
+      "- 核心线程数、最大线程数和队列容量需要结合 CPU/IO 任务类型配置。",
+      "- 拒绝策略要结合业务降级、日志告警和限流保护。",
+      "",
+      "## 示例代码",
+      "```",
+      "ExecutorService pool = Executors.newFixedThreadPool(8);",
+      "```",
+    ].join("\n");
+
+    const response = await handleRequest(
+      adminPost("/api/admin/candidates/batch", {
+        items: [
+          {
+            id: "thread-pool-structured",
+            type: "question",
+            title: "Java 线程池怎么配置？",
+            category: "Java",
+            tags: ["线程池"],
+            contentMd: content,
+            sourceName: "Doocs advanced-java",
+            sourceUrl: "https://java.doocs.org/thread-pool",
+            trustedSource: true,
+          },
+        ],
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(json(response)).resolves.toMatchObject({ accepted: 1, published: 1 });
+
+    const detailResponse = await handleRequest(apiRequest("/api/content/thread-pool-structured"), env);
+    const detailBody = await json(detailResponse);
+    expect(detailBody.item).toEqual(
+      expect.objectContaining({
+        contentHtml: expect.stringContaining("<h2>回答重点</h2>"),
+        sections: [
+          expect.objectContaining({ title: "概览", html: expect.stringContaining("<p>Java 线程池用于复用线程") }),
+          expect.objectContaining({ title: "回答重点", html: expect.stringContaining("<ul>") }),
+          expect.objectContaining({ title: "示例代码", html: expect.stringContaining("<pre><code>") }),
+        ],
+        reviewFlags: [],
+      }),
+    );
   });
 
   it("rejects weak candidates automatically", async () => {

@@ -36,6 +36,205 @@ const TECH_KEYWORDS = [
   "面试",
   "题",
 ];
+const NAVIGATION_NOISE_PATTERNS = ["skip to content", "main navigation", "sidebar navigation", "return to top"];
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function stripMarkdown(value: string): string {
+  return (value || "")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^>\s?/gm, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/[>*_~`#-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function excerptFromMarkdown(value: string, length = 180): string {
+  const text = stripMarkdown(value);
+  return text.length > length ? `${text.slice(0, length)}...` : text;
+}
+
+function renderInlineMarkdown(value: string): string {
+  const escaped = escapeHtml(value);
+  return escaped
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_match, label: string, href: string) => {
+      return `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+    });
+}
+
+function flushParagraph(lines: string[], html: string[]): void {
+  if (lines.length === 0) return;
+  html.push(`<p>${renderInlineMarkdown(lines.join(" "))}</p>`);
+  lines.length = 0;
+}
+
+function flushList(lines: string[], html: string[], ordered: boolean): void {
+  if (lines.length === 0) return;
+  html.push(`<${ordered ? "ol" : "ul"}>${lines.map((line) => `<li>${renderInlineMarkdown(line)}</li>`).join("")}</${ordered ? "ol" : "ul"}>`);
+  lines.length = 0;
+}
+
+export function renderMarkdown(content: string): string {
+  const html: string[] = [];
+  const paragraph: string[] = [];
+  const unorderedItems: string[] = [];
+  const orderedItems: string[] = [];
+  const lines = (content || "").replace(/\r\n?/g, "\n").split("\n");
+  let inCodeFence = false;
+  let codeLines: string[] = [];
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith("```")) {
+      flushParagraph(paragraph, html);
+      flushList(unorderedItems, html, false);
+      flushList(orderedItems, html, true);
+      if (inCodeFence) {
+        html.push(`<pre><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
+        codeLines = [];
+        inCodeFence = false;
+      } else {
+        inCodeFence = true;
+      }
+      continue;
+    }
+
+    if (inCodeFence) {
+      codeLines.push(line);
+      continue;
+    }
+
+    if (!trimmed) {
+      flushParagraph(paragraph, html);
+      flushList(unorderedItems, html, false);
+      flushList(orderedItems, html, true);
+      continue;
+    }
+
+    const heading = trimmed.match(/^(#{1,4})\s+(.+?)\s*#*$/);
+    if (heading) {
+      flushParagraph(paragraph, html);
+      flushList(unorderedItems, html, false);
+      flushList(orderedItems, html, true);
+      const level = heading[1].length;
+      html.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    const unordered = trimmed.match(/^[-*]\s+(.+)$/);
+    if (unordered) {
+      flushParagraph(paragraph, html);
+      flushList(orderedItems, html, true);
+      unorderedItems.push(unordered[1]);
+      continue;
+    }
+
+    const ordered = trimmed.match(/^\d+\.\s+(.+)$/);
+    if (ordered) {
+      flushParagraph(paragraph, html);
+      flushList(unorderedItems, html, false);
+      orderedItems.push(ordered[1]);
+      continue;
+    }
+
+    if (trimmed.startsWith(">")) {
+      flushParagraph(paragraph, html);
+      flushList(unorderedItems, html, false);
+      flushList(orderedItems, html, true);
+      html.push(`<blockquote><p>${renderInlineMarkdown(trimmed.replace(/^>\s?/, ""))}</p></blockquote>`);
+      continue;
+    }
+
+    flushList(unorderedItems, html, false);
+    flushList(orderedItems, html, true);
+    paragraph.push(trimmed);
+  }
+
+  if (inCodeFence) {
+    html.push(`<pre><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
+  }
+  flushParagraph(paragraph, html);
+  flushList(unorderedItems, html, false);
+  flushList(orderedItems, html, true);
+
+  return html.join("");
+}
+
+export function parseSectionsFromMarkdown(content: string): ContentSection[] {
+  const normalized = (content || "").trim();
+  if (!normalized) return [];
+
+  const headingPattern = /^(#{2,4})\s+(.+?)\s*#*\s*$/gm;
+  const matches = Array.from(normalized.matchAll(headingPattern));
+
+  if (matches.length === 0) {
+    return [
+      {
+        title: "题解",
+        level: 2,
+        content: normalized,
+        html: renderMarkdown(normalized),
+        excerpt: excerptFromMarkdown(normalized, 140),
+      },
+    ];
+  }
+
+  const sections: ContentSection[] = [];
+  const prelude = normalized.slice(0, matches[0].index).trim();
+  if (prelude) {
+    sections.push({
+      title: "概览",
+      level: 2,
+      content: prelude,
+      html: renderMarkdown(prelude),
+      excerpt: excerptFromMarkdown(prelude, 140),
+    });
+  }
+
+  matches.forEach((match, index) => {
+    const next = matches[index + 1];
+    const start = Number(match.index) + match[0].length;
+    const end = next ? Number(next.index) : normalized.length;
+    const body = normalized.slice(start, end).trim();
+    sections.push({
+      title: stripMarkdown(match[2]).trim() || "答案",
+      level: match[1].length,
+      content: body,
+      html: renderMarkdown(body),
+      excerpt: excerptFromMarkdown(body, 140),
+    });
+  });
+
+  return sections.filter((section) => section.content || section.html || section.excerpt);
+}
+
+function markdownStructureScore(value: string): { score: number; flags: string[]; headingCount: number } {
+  const headingCount = (value.match(/^#{2,4}\s+/gm) ?? []).length;
+  const listCount = (value.match(/^(?:[-*]|\d+\.)\s+/gm) ?? []).length;
+  const codeFenceCount = (value.match(/```/g) ?? []).length / 2;
+  const linkCount = (value.match(/\[[^\]]+\]\(https?:\/\/[^)\s]+\)/g) ?? []).length;
+  const score = Math.min(25, headingCount * 8 + Math.min(8, listCount * 2) + Math.min(6, Math.floor(codeFenceCount) * 3) + Math.min(4, linkCount));
+  const flags: string[] = [];
+  if (headingCount === 0 && listCount < 2 && codeFenceCount < 1) {
+    flags.push("weak_structure");
+  }
+  return { score, flags, headingCount };
+}
 
 export function isContentType(value: string | null | undefined): value is ContentType {
   return Boolean(value && VALID_TYPES.has(value as ContentType));
@@ -148,6 +347,12 @@ function normalizeSections(value: unknown): ContentSection[] {
     .filter((section) => section.content || section.html || section.excerpt);
 }
 
+function normalizeContentSections(inputSections: unknown, contentMd: string): ContentSection[] {
+  const sections = normalizeSections(inputSections);
+  if (sections.length > 0) return sections;
+  return parseSectionsFromMarkdown(contentMd);
+}
+
 function isTrustedSource(input: ContentItemInput, sourceUrl: string, sourceName: string): boolean {
   if (input.trustedSource === true || input.trusted_source === true) return true;
   const normalizedName = sourceName.toLowerCase();
@@ -170,6 +375,9 @@ function calculateReview(input: ContentItemInput, item: Omit<NormalizedContentIt
   const normalizedText = normalizeWhitespace(text).toLowerCase();
   const flags = new Set<string>(providedFlags);
   let score = typeof providedScore === "number" && Number.isFinite(providedScore) ? providedScore : 50;
+  const structure = markdownStructureScore(item.contentMd);
+  score += structure.score;
+  for (const flag of structure.flags) flags.add(flag);
 
   if (trusted) score += 10;
 
@@ -202,6 +410,15 @@ function calculateReview(input: ContentItemInput, item: Omit<NormalizedContentIt
     flags.add("promotion_risk");
   }
 
+  if (NAVIGATION_NOISE_PATTERNS.some((pattern) => normalizedText.includes(pattern))) {
+    score -= 60;
+    flags.add("navigation_noise");
+  }
+
+  if (flags.has("weak_structure") && contentLength < 800) {
+    score -= 15;
+  }
+
   const reviewScore = Math.max(0, Math.min(100, Math.round(score)));
   return {
     score: reviewScore,
@@ -213,10 +430,15 @@ function calculateReview(input: ContentItemInput, item: Omit<NormalizedContentIt
   };
 }
 
-function decideStatus(defaultStatus: ContentStatus, inputStatus: ContentStatus, review: { score: number; trusted: boolean }): ContentStatus {
+function decideStatus(
+  defaultStatus: ContentStatus,
+  inputStatus: ContentStatus,
+  review: { score: number; trusted: boolean; flags: string[] },
+): ContentStatus {
   if (defaultStatus === "published") return inputStatus;
   if (inputStatus === "duplicate" || inputStatus === "rejected") return inputStatus;
   if (review.score < 60) return "rejected";
+  if (review.flags.includes("weak_structure")) return "candidate";
   if (review.trusted && review.score >= 85) return "published";
   return "candidate";
 }
@@ -232,7 +454,7 @@ export async function normalizeContentInput(
 
   const title = assertString(input.title, "title");
   const contentMd = input.contentMd ?? input.content ?? "";
-  const contentHtml = input.contentHtml ?? "";
+  const contentHtml = input.contentHtml?.trim() || renderMarkdown(contentMd);
   const sourceUrl = canonicalizeUrl(input.sourceUrl ?? input.source_url);
   const sourceName = input.sourceName ?? input.source_name ?? input.source ?? "";
   const sourcePath = input.sourcePath ?? input.source_path ?? sourceUrl;
@@ -246,10 +468,10 @@ export async function normalizeContentInput(
     title,
     category: input.category?.trim() || "未分类",
     tags: Array.isArray(input.tags) ? input.tags.map((tag) => tag.trim()).filter(Boolean).slice(0, 20) : [],
-    excerpt: input.excerpt?.trim() || normalizeWhitespace(contentMd.replace(/[#>*_`[\]()]/g, " ")).slice(0, 180),
+    excerpt: input.excerpt?.trim() || excerptFromMarkdown(contentMd),
     contentMd,
     contentHtml,
-    sections: normalizeSections(input.sections),
+    sections: normalizeContentSections(input.sections, contentMd),
     sourceUrl,
     sourceName: sourceName.trim(),
     sourcePath: sourcePath?.trim() || "",
